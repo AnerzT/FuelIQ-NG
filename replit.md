@@ -33,16 +33,26 @@ Generated client at `generated/prisma/`. Config at `prisma.config.ts`.
 
 Apapa (Lagos), Calabar (Cross River), Port Harcourt (Rivers), Warri (Delta), Onne (Rivers), Bonny (Rivers), Atlas Cove (Lagos), Ijegun (Lagos)
 
-## Backend Architecture (Controller/Middleware Pattern)
+## Backend Architecture (Controller/Middleware/Services Pattern)
 
 - `server/middleware/auth.ts` - JWT auth middleware (`requireAuth`), token helpers
 - `server/controllers/auth.controller.ts` - Register, login, getMe handlers
 - `server/controllers/terminal.controller.ts` - GET terminals handler
-- `server/controllers/forecast.controller.ts` - GET/POST forecast handlers
+- `server/controllers/forecast.controller.ts` - GET/POST/generate forecast handlers
 - `server/controllers/signal.controller.ts` - GET/POST signal handlers
 - `server/controllers/price-history.controller.ts` - GET price history handler
+- `server/services/forecastEngine.ts` - Reusable forecast calculation service
 - `server/routes.ts` - Route registration (thin, imports controllers + middleware)
 - `server/storage.ts` - Database storage layer (Drizzle/PostgreSQL)
+
+## Forecast Engine (`server/services/forecastEngine.ts`)
+
+Computes forecasts from market signals and price history:
+- **Bullish pattern**: TruckQueue=High + VesselActivity=None + NNPCSupply=Weak → bias=bullish, price range shifted up 10-20 naira
+- **Bearish pattern**: VesselActivity=High + NNPCSupply=Strong → bias=bearish, price range shifted down
+- **Confidence**: Calculated from signal alignment (40-95% range)
+- **Base price**: Derived from last 7 days of price history average and spread
+- Exports: `computeForecast()`, `matchesBullishPattern()`, `matchesBearishPattern()`
 
 ## Key Files
 
@@ -65,7 +75,8 @@ All protected routes require JWT Bearer token in Authorization header.
 - `GET /api/auth/me` - Get current user (protected)
 - `GET /api/terminals` - List all terminals (protected)
 - `GET /api/forecast/:terminalId` - Get forecast for terminal (protected)
-- `POST /api/forecast` - Create forecast (protected)
+- `POST /api/forecast` - Create forecast manually (protected)
+- `POST /api/forecast/generate/:terminalId` - Generate forecast from signals via engine (protected)
 - `GET /api/signals/:terminalId` - Get signals for terminal (protected)
 - `POST /api/signals` - Create market signal (protected)
 - `GET /api/terminals/:id/price-history` - Get price history (protected)
