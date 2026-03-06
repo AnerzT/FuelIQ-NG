@@ -23,8 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
+        const json = await res.json();
+        const userData = json.data?.user || json.user;
+        setUser(userData);
       } else {
         localStorage.removeItem("fueliq_token");
         setToken(null);
@@ -57,10 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const err = await res.json();
       throw new Error(err.message || "Login failed");
     }
-    const data = await res.json();
-    localStorage.setItem("fueliq_token", data.token);
-    setToken(data.token);
-    setUser(data.user);
+    const json = await res.json();
+    const authData = json.data || json;
+    localStorage.setItem("fueliq_token", authData.token);
+    setToken(authData.token);
+    setUser(authData.user);
   };
 
   const register = async (regData: { name: string; email: string; password: string }) => {
@@ -73,10 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const err = await res.json();
       throw new Error(err.message || "Registration failed");
     }
-    const data = await res.json();
-    localStorage.setItem("fueliq_token", data.token);
-    setToken(data.token);
-    setUser(data.user);
+    const json = await res.json();
+    const authData = json.data || json;
+    localStorage.setItem("fueliq_token", authData.token);
+    setToken(authData.token);
+    setUser(authData.user);
   };
 
   const logout = () => {

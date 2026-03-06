@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
+import { authFetch } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import {
   Activity,
@@ -65,18 +65,24 @@ function getBiasDisplay(bias: string) {
 
 interface ForecastResponse {
   terminal: Terminal;
-  forecast: Forecast | null;
-  signals: MarketSignal | null;
+  forecast: Forecast;
+}
+
+interface SignalResponse {
+  terminal: Terminal;
+  signal: MarketSignal;
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>("");
+  const fetchFn = authFetch(token);
 
   const { data: terminalList } = useQuery<Terminal[]>({
     queryKey: ["/api/terminals"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: fetchFn,
+    enabled: !!token,
   });
 
   useEffect(() => {
@@ -86,15 +92,21 @@ export default function Dashboard() {
   }, [terminalList, selectedTerminalId]);
 
   const { data: forecastData, isLoading: forecastLoading, refetch: refetchForecast } = useQuery<ForecastResponse>({
-    queryKey: ["/api/terminals", selectedTerminalId, "forecast"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    enabled: !!selectedTerminalId,
+    queryKey: ["/api/forecast", selectedTerminalId],
+    queryFn: fetchFn,
+    enabled: !!selectedTerminalId && !!token,
+  });
+
+  const { data: signalData, isLoading: signalLoading } = useQuery<SignalResponse>({
+    queryKey: ["/api/signals", selectedTerminalId],
+    queryFn: fetchFn,
+    enabled: !!selectedTerminalId && !!token,
   });
 
   const { data: priceHistoryData, isLoading: historyLoading } = useQuery<PriceHistoryEntry[]>({
     queryKey: ["/api/terminals", selectedTerminalId, "price-history"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    enabled: !!selectedTerminalId,
+    queryFn: fetchFn,
+    enabled: !!selectedTerminalId && !!token,
   });
 
   if (!user) {
@@ -111,8 +123,8 @@ export default function Dashboard() {
     }));
 
   const forecast = forecastData?.forecast;
-  const signals = forecastData?.signals;
   const terminal = forecastData?.terminal;
+  const signal = signalData?.signal;
 
   const currentDate = new Date().toLocaleDateString("en-NG", {
     weekday: "long",
@@ -185,7 +197,7 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {forecastLoading ? (
+        {forecastLoading || signalLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
@@ -195,8 +207,8 @@ export default function Dashboard() {
               <CardContent className="p-5 space-y-4">
                 <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Market Signals</h3>
                 <div className="space-y-2">
-                  {signals ? signalConfig.map(({ key, label, icon: Icon }) => {
-                    const value = (signals as any)[key] || "N/A";
+                  {signal ? signalConfig.map(({ key, label, icon: Icon }) => {
+                    const value = (signal as any)[key] || "N/A";
                     return (
                       <div key={key} className="flex items-center justify-between gap-2 py-2.5 px-3 rounded-md bg-muted/50" data-testid={`signal-${key}`}>
                         <div className="flex items-center gap-2 text-sm">
@@ -213,16 +225,14 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card data-testid="card-price-info">
+            <Card data-testid="card-terminal-info">
               <CardContent className="p-5 space-y-4">
                 <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Terminal Info</h3>
                 {terminal ? (
                   <div className="space-y-3">
                     <div className="py-3 px-3 rounded-md bg-muted/50">
                       <div className="text-sm text-muted-foreground mb-1">Terminal</div>
-                      <div className="text-lg font-semibold" data-testid="text-terminal-name">
-                        {terminal.name}
-                      </div>
+                      <div className="text-lg font-semibold" data-testid="text-terminal-name">{terminal.name}</div>
                     </div>
                     <div className="py-3 px-3 rounded-md bg-muted/50">
                       <div className="text-sm text-muted-foreground mb-1">State</div>

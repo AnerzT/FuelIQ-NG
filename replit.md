@@ -33,28 +33,46 @@ Generated client at `generated/prisma/`. Config at `prisma.config.ts`.
 
 Apapa (Lagos), Calabar (Cross River), Port Harcourt (Rivers), Warri (Delta), Onne (Rivers), Bonny (Rivers), Atlas Cove (Lagos), Ijegun (Lagos)
 
+## Backend Architecture (Controller/Middleware Pattern)
+
+- `server/middleware/auth.ts` - JWT auth middleware (`requireAuth`), token helpers
+- `server/controllers/auth.controller.ts` - Register, login, getMe handlers
+- `server/controllers/terminal.controller.ts` - GET terminals handler
+- `server/controllers/forecast.controller.ts` - GET/POST forecast handlers
+- `server/controllers/signal.controller.ts` - GET/POST signal handlers
+- `server/controllers/price-history.controller.ts` - GET price history handler
+- `server/routes.ts` - Route registration (thin, imports controllers + middleware)
+- `server/storage.ts` - Database storage layer (Drizzle/PostgreSQL)
+
 ## Key Files
 
 - `shared/schema.ts` - Drizzle schema + Zod validation
 - `prisma/schema.prisma` - Prisma schema definition
-- `server/storage.ts` - Database storage layer (Drizzle/PostgreSQL)
-- `server/routes.ts` - API endpoints + JWT auth
 - `server/seed.ts` - Drizzle terminal seeding
 - `server/prisma-seed.ts` - Prisma terminal seeding
 - `client/src/lib/auth.tsx` - Auth context provider
+- `client/src/lib/api.ts` - Auth-aware fetch helper for TanStack Query
 - `client/src/pages/landing.tsx` - Public landing page
 - `client/src/pages/dashboard.tsx` - Main dashboard (authenticated)
 - `client/src/pages/login.tsx` / `register.tsx` - Auth pages
 
 ## API Endpoints
 
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login
-- `GET /api/auth/me` - Get current user (requires JWT)
-- `GET /api/terminals` - List all terminals
-- `GET /api/terminals/:id/forecast` - Get forecast + signals for terminal
-- `GET /api/terminals/:id/price-history` - Get price history for terminal
-- `GET /api/forecasts/latest` - Get latest forecast (default terminal)
+All protected routes require JWT Bearer token in Authorization header.
+
+- `POST /api/auth/register` - Register new user (public)
+- `POST /api/auth/login` - Login (public)
+- `GET /api/auth/me` - Get current user (protected)
+- `GET /api/terminals` - List all terminals (protected)
+- `GET /api/forecast/:terminalId` - Get forecast for terminal (protected)
+- `POST /api/forecast` - Create forecast (protected)
+- `GET /api/signals/:terminalId` - Get signals for terminal (protected)
+- `POST /api/signals` - Create market signal (protected)
+- `GET /api/terminals/:id/price-history` - Get price history (protected)
+
+## API Response Format
+
+All responses follow: `{ success: boolean, message?: string, data?: any }`
 
 ## Installed Packages
 
