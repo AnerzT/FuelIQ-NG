@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import {
   users, terminals, marketSignals, forecasts, priceHistory,
   refineryUpdates, regulationUpdates, externalPriceFeeds, fxRates, notificationLogs,
@@ -55,6 +55,13 @@ export interface IStorage {
   getSubscribedUsers(channel: "sms" | "whatsapp", alertType: keyof NotificationPrefs): Promise<User[]>;
   createNotificationLog(data: Omit<NotificationLog, "id" | "createdAt">): Promise<NotificationLog>;
   getNotificationLogs(userId: string, limit?: number): Promise<NotificationLog[]>;
+
+  updateUserSubscription(userId: string, data: { tier?: string; startDate?: Date; endDate?: Date; assignedTerminalId?: string }): Promise<User | undefined>;
+  incrementForecastCount(userId: string): Promise<void>;
+  resetForecastCount(userId: string): Promise<void>;
+  incrementSmsCount(userId: string): Promise<void>;
+  resetSmsCount(userId: string): Promise<void>;
+  getAllUsers(): Promise<User[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -270,6 +277,52 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notificationLogs.userId, userId))
       .orderBy(desc(notificationLogs.createdAt))
       .limit(limit);
+  }
+
+  async updateUserSubscription(
+    userId: string,
+    data: { tier?: string; startDate?: Date; endDate?: Date; assignedTerminalId?: string }
+  ): Promise<User | undefined> {
+    const updateData: Record<string, any> = {};
+    if (data.tier !== undefined) updateData.subscriptionTier = data.tier;
+    if (data.startDate !== undefined) updateData.subscriptionStartDate = data.startDate;
+    if (data.endDate !== undefined) updateData.subscriptionEndDate = data.endDate;
+    if (data.assignedTerminalId !== undefined) updateData.assignedTerminalId = data.assignedTerminalId;
+    if (Object.keys(updateData).length === 0) return this.getUser(userId);
+    const [updated] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
+  async incrementForecastCount(userId: string): Promise<void> {
+    await db.update(users).set({
+      forecastsUsedToday: sql`${users.forecastsUsedToday} + 1`,
+      forecastDayResetDate: new Date(),
+    }).where(eq(users.id, userId));
+  }
+
+  async resetForecastCount(userId: string): Promise<void> {
+    await db.update(users).set({
+      forecastsUsedToday: 0,
+      forecastDayResetDate: new Date(),
+    }).where(eq(users.id, userId));
+  }
+
+  async incrementSmsCount(userId: string): Promise<void> {
+    await db.update(users).set({
+      smsAlertsUsedThisWeek: sql`${users.smsAlertsUsedThisWeek} + 1`,
+      smsWeekResetDate: sql`COALESCE(${users.smsWeekResetDate}, NOW())`,
+    }).where(eq(users.id, userId));
+  }
+
+  async resetSmsCount(userId: string): Promise<void> {
+    await db.update(users).set({
+      smsAlertsUsedThisWeek: 0,
+      smsWeekResetDate: new Date(),
+    }).where(eq(users.id, userId));
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
   }
 }
 

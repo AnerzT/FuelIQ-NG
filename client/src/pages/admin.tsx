@@ -29,10 +29,13 @@ import {
   DollarSign,
   AlertTriangle,
   BarChart3,
+  Crown,
+  Users,
 } from "lucide-react";
-import type { Terminal, Forecast, MarketSignal } from "@shared/schema";
+import type { Terminal, Forecast, MarketSignal, SubscriptionTier } from "@shared/schema";
+import { TIER_LIMITS } from "@shared/schema";
 
-type AdminTab = "terminals" | "forecast" | "signals" | "history";
+type AdminTab = "terminals" | "forecast" | "signals" | "history" | "subscriptions";
 
 function getBiasIcon(bias: string) {
   const b = bias?.toLowerCase();
@@ -63,6 +66,7 @@ export default function Admin() {
     { key: "forecast", label: "Add Forecast", icon: Plus },
     { key: "signals", label: "Update Signals", icon: Activity },
     { key: "history", label: "Forecast History", icon: History },
+    { key: "subscriptions", label: "Subscriptions", icon: Users },
   ];
 
   return (
@@ -133,6 +137,7 @@ export default function Admin() {
         {activeTab === "forecast" && <ForecastPanel token={token} fetchFn={fetchFn} toast={toast} />}
         {activeTab === "signals" && <SignalsPanel token={token} fetchFn={fetchFn} toast={toast} />}
         {activeTab === "history" && <HistoryPanel token={token} fetchFn={fetchFn} />}
+        {activeTab === "subscriptions" && <SubscriptionsPanel token={token} fetchFn={fetchFn} toast={toast} />}
       </main>
     </div>
   );
@@ -652,6 +657,136 @@ function HistoryPanel({ token, fetchFn }: { token: string | null; fetchFn: any }
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+interface SubUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tier: string;
+  subscriptionStartDate: string | null;
+  subscriptionEndDate: string | null;
+  smsAlertsUsedThisWeek: number;
+  forecastsUsedToday: number;
+  assignedTerminalId: string | null;
+}
+
+function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; fetchFn: any; toast: any }) {
+  const { data: subs, isLoading } = useQuery<SubUser[]>({
+    queryKey: ["/api/admin/subscriptions"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ userId, tier }: { userId: string; tier: string }) => {
+      const res = await fetch(`/api/admin/subscriptions/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tier }),
+      });
+      if (!res.ok) throw new Error("Failed to update subscription");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscriptions"] });
+      toast({ title: data.message || "Subscription updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update subscription", variant: "destructive" });
+    },
+  });
+
+  const tierBadge = (tier: string) => {
+    const styles: Record<string, string> = {
+      free: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+      pro: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+      enterprise: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    };
+    return styles[tier] || styles.free;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-20 rounded-xl bg-white/[0.02] border border-white/[0.06] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  const stats = {
+    total: subs?.length || 0,
+    free: subs?.filter((s) => s.tier === "free").length || 0,
+    pro: subs?.filter((s) => s.tier === "pro").length || 0,
+    enterprise: subs?.filter((s) => s.tier === "enterprise").length || 0,
+  };
+
+  return (
+    <div className="space-y-4" data-testid="panel-subscriptions">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Users", value: stats.total, color: "text-white" },
+          { label: "Free", value: stats.free, color: "text-slate-400" },
+          { label: "Pro", value: stats.pro, color: "text-blue-400" },
+          { label: "Enterprise", value: stats.enterprise, color: "text-purple-400" },
+        ].map((stat) => (
+          <div key={stat.label} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+            <p className="text-xs text-slate-500">{stat.label}</p>
+            <p className={`text-2xl font-bold ${stat.color}`} data-testid={`stat-${stat.label.toLowerCase().replace(" ", "-")}`}>
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold px-1">
+        {subs?.length || 0} users
+      </div>
+
+      {subs?.map((sub) => (
+        <div
+          key={sub.id}
+          className="flex items-center justify-between gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition-colors"
+          data-testid={`sub-row-${sub.id}`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+              {sub.name?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-white truncate">{sub.name}</div>
+              <div className="text-xs text-slate-500 truncate">{sub.email}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="hidden md:flex flex-col items-end text-xs text-slate-500">
+              <span>SMS: {sub.smsAlertsUsedThisWeek}/wk</span>
+              <span>Forecasts: {sub.forecastsUsedToday}/day</span>
+            </div>
+            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${tierBadge(sub.tier)}`} data-testid={`badge-tier-${sub.id}`}>
+              {(TIER_LIMITS[sub.tier as SubscriptionTier] || TIER_LIMITS.free).label}
+            </span>
+            <Select
+              value={sub.tier}
+              onValueChange={(tier) => updateMutation.mutate({ userId: sub.id, tier })}
+            >
+              <SelectTrigger className="w-32 bg-white/[0.03] border-white/[0.08] text-slate-300 text-xs" data-testid={`select-tier-${sub.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#0c1220] border-white/[0.08]">
+                <SelectItem value="free" className="text-slate-300 focus:bg-white/[0.06] focus:text-white">Free</SelectItem>
+                <SelectItem value="pro" className="text-blue-400 focus:bg-white/[0.06]">Pro</SelectItem>
+                <SelectItem value="enterprise" className="text-purple-400 focus:bg-white/[0.06]">Enterprise</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

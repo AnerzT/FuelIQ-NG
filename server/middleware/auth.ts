@@ -6,9 +6,12 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET or SESSION_SECRET environment variable is required");
 }
 
+import type { SubscriptionTier } from "@shared/schema";
+
 export interface AuthRequest extends Request {
   userId?: string;
   userRole?: string;
+  subscriptionTier?: SubscriptionTier;
 }
 
 export function generateToken(userId: string): string {
@@ -43,13 +46,14 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
   next();
 }
 
-export function attachUserRole(storageInstance: { getUser: (id: string) => Promise<{ role: string } | undefined> }) {
+export function attachUserRole(storageInstance: { getUser: (id: string) => Promise<{ role: string; subscriptionTier: string } | undefined> }) {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     if (req.userId) {
       try {
         const user = await storageInstance.getUser(req.userId);
         if (user) {
           req.userRole = user.role;
+          req.subscriptionTier = (user.subscriptionTier || "free") as SubscriptionTier;
         }
       } catch {}
     }

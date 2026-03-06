@@ -38,7 +38,7 @@ export async function register(req: Request, res: Response) {
       success: true,
       message: "Account created successfully",
       data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
         token,
       },
     });
@@ -81,7 +81,7 @@ export async function login(req: Request, res: Response) {
       success: true,
       message: "Login successful",
       data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
         token,
       },
     });
@@ -100,7 +100,7 @@ export async function getMe(req: AuthRequest, res: Response) {
     return res.json({
       success: true,
       data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
       },
     });
   } catch (err: any) {

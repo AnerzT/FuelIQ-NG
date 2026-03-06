@@ -12,6 +12,68 @@ export interface NotificationPrefs {
   morningDigest: boolean;
 }
 
+export type SubscriptionTier = "free" | "pro" | "enterprise";
+
+export const TIER_LIMITS = {
+  free: {
+    label: "Free",
+    price: 0,
+    priceLabel: "₦0",
+    period: "/month",
+    maxTerminals: 1,
+    forecastsPerDay: 1,
+    dataDelay: 24,
+    aiProbability: false,
+    smsAlertsPerWeek: 0,
+    whatsappDigest: false,
+    refineryUpdates: false,
+    regulationAlerts: false,
+    apiAccess: false,
+    forecastExport: false,
+    customSensitivity: false,
+    dedicatedSupport: false,
+    earlySignals: false,
+  },
+  pro: {
+    label: "Pro",
+    price: 15000,
+    priceLabel: "₦15,000",
+    period: "/month",
+    maxTerminals: Infinity,
+    forecastsPerDay: Infinity,
+    dataDelay: 0,
+    aiProbability: true,
+    smsAlertsPerWeek: 5,
+    whatsappDigest: true,
+    refineryUpdates: true,
+    regulationAlerts: true,
+    apiAccess: false,
+    forecastExport: false,
+    customSensitivity: false,
+    dedicatedSupport: false,
+    earlySignals: false,
+  },
+  enterprise: {
+    label: "Enterprise",
+    price: 90000,
+    priceLabel: "₦90,000",
+    period: "/month",
+    maxTerminals: Infinity,
+    forecastsPerDay: Infinity,
+    dataDelay: 0,
+    aiProbability: true,
+    smsAlertsPerWeek: Infinity,
+    whatsappDigest: true,
+    refineryUpdates: true,
+    regulationAlerts: true,
+    apiAccess: true,
+    forecastExport: true,
+    customSensitivity: true,
+    dedicatedSupport: true,
+    earlySignals: true,
+  },
+} as const;
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -28,6 +90,14 @@ export const users = pgTable("users", {
     refineryAlerts: true,
     morningDigest: false,
   }),
+  subscriptionTier: text("subscription_tier").notNull().default("free"),
+  subscriptionStartDate: timestamp("subscription_start_date"),
+  subscriptionEndDate: timestamp("subscription_end_date"),
+  smsAlertsUsedThisWeek: integer("sms_alerts_used_this_week").notNull().default(0),
+  smsWeekResetDate: timestamp("sms_week_reset_date"),
+  forecastsUsedToday: integer("forecasts_used_today").notNull().default(0),
+  forecastDayResetDate: timestamp("forecast_day_reset_date"),
+  assignedTerminalId: varchar("assigned_terminal_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -160,6 +230,13 @@ export const insertExternalPriceFeedSchema = createInsertSchema(externalPriceFee
   sourceName: z.enum(["NNPC", "Dangote", "Depot"]),
 });
 export const insertFxRateSchema = createInsertSchema(fxRates).omit({ id: true, createdAt: true });
+
+export const updateSubscriptionSchema = z.object({
+  tier: z.enum(["free", "pro", "enterprise"]),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  assignedTerminalId: z.string().optional(),
+});
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertRefineryUpdate = z.infer<typeof insertRefineryUpdateSchema>;

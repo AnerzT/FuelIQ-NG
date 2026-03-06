@@ -408,19 +408,19 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-5 max-w-4xl mx-auto">
             {[
               {
-                name: "Starter", price: "Free", period: "", desc: "Perfect for individual marketers",
-                features: ["1 region", "Daily forecasts", "Basic market signals", "Email alerts"],
-                cta: "Get Started", highlighted: false,
+                name: "Free", price: "₦0", period: "/month", desc: "Lead generation — get started",
+                features: ["1 terminal access", "1 forecast per day", "24-hour delayed data", "Basic market signals"],
+                cta: "Get Started", highlighted: false, color: "emerald",
               },
               {
-                name: "Professional", price: "\u20A615,000", period: "/month", desc: "For serious fuel traders",
-                features: ["5 regions", "Real-time forecasts", "All market signals", "SMS + Email alerts", "Price history & charts", "Priority support"],
-                cta: "Start Free Trial", highlighted: true,
+                name: "Pro", price: "₦15,000", period: "/month", desc: "Best for medium marketers",
+                features: ["All terminals", "Real-time forecasts", "AI probability engine", "Refinery updates", "Regulation alerts", "5 SMS alerts per week", "WhatsApp daily summary"],
+                cta: "Start Free Trial", highlighted: true, color: "blue",
               },
               {
-                name: "Enterprise", price: "Custom", period: "", desc: "For large operations",
-                features: ["Unlimited regions", "API access", "Custom integrations", "Dedicated analyst", "Team accounts", "SLA guarantee"],
-                cta: "Contact Sales", highlighted: false,
+                name: "Enterprise", price: "₦90,000", period: "/month", desc: "Best for depot owners & large traders",
+                features: ["Unlimited terminals", "Early signal detection", "API access", "Forecast export (Excel)", "Unlimited SMS alerts", "WhatsApp alerts", "Custom forecast sensitivity", "Dedicated support"],
+                cta: "Contact Sales", highlighted: false, color: "purple",
               },
             ].map((plan, i) => (
               <div

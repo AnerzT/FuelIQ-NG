@@ -78,6 +78,8 @@ export async function generateForecast(req: AuthRequest, res: Response) {
       ...result,
     });
 
+    storage.incrementForecastCount(req.userId!).catch(() => {});
+
     onForecastCreated(terminalId, forecast).catch((err) =>
       console.error(`[Notify] Error in forecast notification: ${err.message}`)
     );

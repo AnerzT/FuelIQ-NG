@@ -32,6 +32,14 @@ import {
   triggerMorningDigest,
   triggerTestNotification,
 } from "./controllers/notification.controller";
+import {
+  getSubscriptionInfo,
+  getTierInfo,
+  updateSubscription,
+  adminGetAllSubscriptions,
+  adminUpdateSubscription,
+} from "./controllers/subscription.controller";
+import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard";
 import { seedDatabase, seedAdminUser } from "./seed";
 import { seedPrismaDatabase } from "./prisma-seed";
 import { storage } from "./storage";
@@ -44,33 +52,35 @@ export async function registerRoutes(
   await seedAdminUser();
   await seedPrismaDatabase();
 
+  const withTier = [requireAuth, attachUserRole(storage)];
+
   app.post("/api/auth/register", register);
   app.post("/api/auth/login", login);
   app.get("/api/auth/me", requireAuth, getMe);
 
   app.get("/api/terminals", requireAuth, getTerminals);
 
-  app.get("/api/forecast/:terminalId", requireAuth, getForecast);
-  app.post("/api/forecast", requireAuth, createForecast);
-  app.post("/api/forecast/generate/:terminalId", requireAuth, generateForecast);
-  app.post("/api/forecast/score/:terminalId", requireAuth, scoreForecast);
+  app.get("/api/forecast/:terminalId", ...withTier, requireTerminalAccess(), withDataDelay(), getForecast);
+  app.post("/api/forecast", ...withTier, requireForecastQuota(), createForecast);
+  app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast);
+  app.post("/api/forecast/score/:terminalId", ...withTier, requireTier("pro"), requireTerminalAccess(), requireForecastQuota(), scoreForecast);
 
-  app.get("/api/signals/:terminalId", requireAuth, getSignals);
+  app.get("/api/signals/:terminalId", ...withTier, requireTerminalAccess(), getSignals);
   app.post("/api/signals", requireAuth, createSignal);
 
-  app.get("/api/terminals/:id/price-history", requireAuth, getPriceHistory);
+  app.get("/api/terminals/:id/price-history", ...withTier, withDataDelay(), getPriceHistory);
 
-  const adminMiddleware = [requireAuth, attachUserRole(storage), requireAdmin];
+  const adminMiddleware = [...withTier, requireAdmin];
   app.get("/api/admin/terminals", ...adminMiddleware, adminGetTerminals);
   app.patch("/api/admin/terminals/:id", ...adminMiddleware, adminToggleTerminal);
   app.post("/api/admin/forecasts", ...adminMiddleware, adminCreateForecast);
   app.post("/api/admin/signals", ...adminMiddleware, adminUpdateSignal);
   app.get("/api/admin/forecasts", ...adminMiddleware, adminGetForecasts);
 
-  app.get("/api/market/overview", requireAuth, getMarketOverview);
-  app.get("/api/market/nnpc", requireAuth, getNnpcPrice);
-  app.get("/api/market/fx", requireAuth, getFxRate);
-  app.get("/api/market/vessels", requireAuth, getVesselTracking);
+  app.get("/api/market/overview", ...withTier, withDataDelay(), getMarketOverview);
+  app.get("/api/market/nnpc", ...withTier, withDataDelay(), getNnpcPrice);
+  app.get("/api/market/fx", ...withTier, withDataDelay(), getFxRate);
+  app.get("/api/market/vessels", ...withTier, withDataDelay(), getVesselTracking);
 
   app.post("/api/admin/sync/nnpc", ...adminMiddleware, triggerNnpcSync);
   app.post("/api/admin/sync/nnpc-recalculate", ...adminMiddleware, triggerNnpcSyncAndRecalculate);
@@ -85,6 +95,13 @@ export async function registerRoutes(
   app.post("/api/notifications/test", requireAuth, triggerTestNotification);
 
   app.post("/api/admin/notifications/morning-digest", ...adminMiddleware, triggerMorningDigest);
+
+  app.get("/api/subscription", ...withTier, getSubscriptionInfo);
+  app.get("/api/subscription/tiers", getTierInfo);
+  app.patch("/api/subscription", ...withTier, updateSubscription);
+
+  app.get("/api/admin/subscriptions", ...adminMiddleware, adminGetAllSubscriptions);
+  app.patch("/api/admin/subscriptions/:userId", ...adminMiddleware, adminUpdateSubscription);
 
   return httpServer;
 }

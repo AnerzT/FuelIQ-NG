@@ -23,6 +23,9 @@ import {
   MapPin,
   Bell,
   Shield,
+  Crown,
+  Zap,
+  Lock,
 } from "lucide-react";
 import {
   AreaChart,
@@ -36,7 +39,8 @@ import {
   Bar,
 } from "recharts";
 import { useState, useEffect } from "react";
-import type { Terminal, Forecast, MarketSignal, PriceHistoryEntry } from "@shared/schema";
+import type { Terminal, Forecast, MarketSignal, PriceHistoryEntry, SubscriptionTier } from "@shared/schema";
+import { TIER_LIMITS } from "@shared/schema";
 
 const signalConfig = [
   { key: "vesselActivity", label: "Vessel Activity", icon: Activity },
@@ -273,6 +277,30 @@ export default function Dashboard() {
                   <span className="hidden sm:inline">Admin</span>
                 </button>
               )}
+              {(() => {
+                const tier = ((user as any).subscriptionTier || "free") as SubscriptionTier;
+                const tierStyles: Record<SubscriptionTier, string> = {
+                  free: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+                  pro: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+                  enterprise: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+                };
+                const tierIcons: Record<SubscriptionTier, typeof Crown> = {
+                  free: Zap,
+                  pro: Crown,
+                  enterprise: Crown,
+                };
+                const TierIcon = tierIcons[tier];
+                return (
+                  <button
+                    onClick={() => setLocation("/subscription")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${tierStyles[tier]}`}
+                    data-testid="button-subscription-tier"
+                  >
+                    <TierIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{TIER_LIMITS[tier].label}</span>
+                  </button>
+                );
+              })()}
               <div className="flex items-center gap-2 pl-2 border-l border-white/[0.06]">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white">
                   {user.name?.charAt(0)?.toUpperCase() || "U"}
