@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth";
 import { register, login, getMe } from "./controllers/auth.controller";
 import { getTerminals } from "./controllers/terminal.controller";
-import { getForecast, createForecast, generateForecast } from "./controllers/forecast.controller";
+import { getForecast, createForecast, generateForecast, scoreForecast } from "./controllers/forecast.controller";
 import { getSignals, createSignal } from "./controllers/signal.controller";
 import { getPriceHistory } from "./controllers/price-history.controller";
 import {
@@ -45,6 +45,7 @@ export async function registerRoutes(
   app.get("/api/forecast/:terminalId", requireAuth, getForecast);
   app.post("/api/forecast", requireAuth, createForecast);
   app.post("/api/forecast/generate/:terminalId", requireAuth, generateForecast);
+  app.post("/api/forecast/score/:terminalId", requireAuth, scoreForecast);
 
   app.get("/api/signals/:terminalId", requireAuth, getSignals);
   app.post("/api/signals", requireAuth, createSignal);

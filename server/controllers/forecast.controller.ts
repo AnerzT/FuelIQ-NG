@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { insertForecastSchema } from "@shared/schema";
 import type { AuthRequest } from "../middleware/auth";
 import { computeForecast } from "../services/forecastEngine";
+import { computeForecastScore } from "../services/forecastScoring";
 
 export async function getForecast(req: AuthRequest, res: Response) {
   try {
@@ -80,6 +81,64 @@ export async function generateForecast(req: AuthRequest, res: Response) {
       success: true,
       message: "Forecast generated from market signals",
       data: { terminal, forecast, signalSnapshot: signal },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function scoreForecast(req: AuthRequest, res: Response) {
+  try {
+    const { terminalId } = req.params;
+
+    const terminal = await storage.getTerminal(terminalId);
+    if (!terminal) {
+      return res.status(404).json({ success: false, message: "Terminal not found" });
+    }
+
+    const signal = await storage.getLatestSignal(terminalId);
+    if (!signal) {
+      return res.status(400).json({ success: false, message: "No market signals available for scoring" });
+    }
+
+    const [history, nnpcFeeds, fxRates] = await Promise.all([
+      storage.getPriceHistory(terminalId, 30),
+      storage.getExternalPriceFeedBySource("NNPC", 1),
+      storage.getFxRates(10),
+    ]);
+
+    const score = computeForecastScore({
+      signal,
+      priceHistory: history,
+      nnpcFeed: nnpcFeeds[0] ?? null,
+      fxRates,
+    });
+
+    const forecast = await storage.createForecast({
+      terminalId,
+      expectedMin: score.expectedRange.min,
+      expectedMax: score.expectedRange.max,
+      bias: score.bias,
+      confidence: score.confidence,
+      suggestedAction: score.suggestedAction,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "AI forecast score generated",
+      data: {
+        terminal,
+        forecast,
+        score: {
+          bias: score.bias,
+          probability: score.probability,
+          expectedRange: score.expectedRange,
+          confidence: score.confidence,
+          suggestedAction: score.suggestedAction,
+          scoring: score.scoring,
+        },
+        signalSnapshot: signal,
+      },
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });

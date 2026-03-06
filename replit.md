@@ -115,14 +115,23 @@ Apapa (Lagos), Calabar (Cross River), Port Harcourt (Rivers), Warri (Delta), Onn
 | `FX_API_KEY` | exchangerate.host API key (falls back to simulation) |
 | `FX_API_URL` | Custom FX rate API URL |
 
-## Forecast Engine (`server/services/forecastEngine.ts`)
+## Forecast Engine
 
-Computes forecasts from market signals and price history:
-- **Bullish pattern**: TruckQueue=High + VesselActivity=None + NNPCSupply=Weak → bias=bullish, price range shifted up 10-20 naira
-- **Bearish pattern**: VesselActivity=High + NNPCSupply=Strong → bias=bearish, price range shifted down
-- **Confidence**: Calculated from signal alignment (40-95% range)
-- **Base price**: Derived from last 7 days of price history average and spread
+### Rules-Based Engine (`server/services/forecastEngine.ts`)
+Legacy heuristic engine for backward compatibility:
+- **Bullish pattern**: TruckQueue=High + VesselActivity=None + NNPCSupply=Weak → bias=bullish
+- **Bearish pattern**: VesselActivity=High + NNPCSupply=Strong → bias=bearish
 - Exports: `computeForecast()`, `matchesBullishPattern()`, `matchesBearishPattern()`
+
+### AI Scoring Engine (`server/services/forecastScoring.ts`)
+Probabilistic forecast scoring system — primary engine used by `/api/forecast/score/:terminalId` and NNPC recalculation:
+- **9 normalized inputs**: 5 market signals (0-1 encoded) + priceTrend (linear regression) + priceVolatility (CV) + fxVolatility (CV) + nnpcPriceChange
+- **Adaptive weights**: Base weights auto-adjust based on market conditions (e.g., fxPressure weight increases 1.5x during high FX volatility)
+- **Softmax probabilities**: Produces { increase, decrease, stable } percentages
+- **Confidence**: Weighted blend of probability certainty (45%), signal clarity (30%), data richness (25%) → range 35-97%
+- **Expected range**: Price history baseline ± bias-adjusted shift with volatility multiplier
+- Returns: `{ bias, probability, expectedRange, confidence, suggestedAction, scoring }`
+- Endpoint: `POST /api/forecast/score/:terminalId`
 
 ## Key Files
 

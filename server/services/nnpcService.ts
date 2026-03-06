@@ -1,5 +1,5 @@
 import { storage } from "../storage";
-import { computeForecast } from "./forecastEngine";
+import { computeForecastScore } from "./forecastScoring";
 
 const NNPC_API_URL = process.env.NNPC_API_URL || "";
 
@@ -98,12 +98,26 @@ export async function syncAndRecalculateForecasts(): Promise<{
         policyRisk: existingSignal.policyRisk,
       });
 
-      const history = await storage.getPriceHistory(terminal.id, 30);
-      const result = computeForecast(updatedSignal, history);
+      const [history, nnpcFeeds, fxRatesData] = await Promise.all([
+        storage.getPriceHistory(terminal.id, 30),
+        storage.getExternalPriceFeedBySource("NNPC", 1),
+        storage.getFxRates(10),
+      ]);
+
+      const result = computeForecastScore({
+        signal: updatedSignal,
+        priceHistory: history,
+        nnpcFeed: nnpcFeeds[0] ?? null,
+        fxRates: fxRatesData,
+      });
 
       await storage.createForecast({
         terminalId: terminal.id,
-        ...result,
+        expectedMin: result.expectedRange.min,
+        expectedMax: result.expectedRange.max,
+        bias: result.bias,
+        confidence: result.confidence,
+        suggestedAction: result.suggestedAction,
       });
 
       forecastsUpdated++;
