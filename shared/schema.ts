@@ -1,7 +1,16 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export interface NotificationPrefs {
+  smsEnabled: boolean;
+  whatsappEnabled: boolean;
+  forecastAlerts: boolean;
+  priceAlerts: boolean;
+  refineryAlerts: boolean;
+  morningDigest: boolean;
+}
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -9,6 +18,16 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("marketer"),
+  phone: text("phone"),
+  whatsappPhone: text("whatsapp_phone"),
+  notificationPrefs: jsonb("notification_prefs").$type<NotificationPrefs>().default({
+    smsEnabled: false,
+    whatsappEnabled: false,
+    forecastAlerts: true,
+    priceAlerts: true,
+    refineryAlerts: true,
+    morningDigest: false,
+  }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -86,6 +105,32 @@ export const fxRates = pgTable("fx_rates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const notificationLogs = pgTable("notification_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  channel: text("channel").notNull(),
+  alertType: text("alert_type").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("pending"),
+  externalId: text("external_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const notificationPrefsSchema = z.object({
+  smsEnabled: z.boolean(),
+  whatsappEnabled: z.boolean(),
+  forecastAlerts: z.boolean(),
+  priceAlerts: z.boolean(),
+  refineryAlerts: z.boolean(),
+  morningDigest: z.boolean(),
+});
+
+export const updateNotificationPrefsSchema = z.object({
+  phone: z.string().optional(),
+  whatsappPhone: z.string().optional(),
+  notificationPrefs: notificationPrefsSchema.partial().optional(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   name: true,
   email: true,
@@ -131,3 +176,4 @@ export type RefineryUpdate = typeof refineryUpdates.$inferSelect;
 export type RegulationUpdate = typeof regulationUpdates.$inferSelect;
 export type ExternalPriceFeed = typeof externalPriceFeeds.$inferSelect;
 export type FxRate = typeof fxRates.$inferSelect;
+export type NotificationLog = typeof notificationLogs.$inferSelect;

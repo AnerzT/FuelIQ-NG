@@ -2,10 +2,11 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, desc } from "drizzle-orm";
 import {
   users, terminals, marketSignals, forecasts, priceHistory,
-  refineryUpdates, regulationUpdates, externalPriceFeeds, fxRates,
+  refineryUpdates, regulationUpdates, externalPriceFeeds, fxRates, notificationLogs,
   type User, type InsertUser, type Terminal, type MarketSignal, type Forecast, type PriceHistoryEntry,
-  type RefineryUpdate, type RegulationUpdate, type ExternalPriceFeed, type FxRate,
+  type RefineryUpdate, type RegulationUpdate, type ExternalPriceFeed, type FxRate, type NotificationLog,
   type InsertRefineryUpdate, type InsertRegulationUpdate, type InsertExternalPriceFeed, type InsertFxRate,
+  type NotificationPrefs,
 } from "@shared/schema";
 
 if (!process.env.DATABASE_URL) {
@@ -49,6 +50,11 @@ export interface IStorage {
   getFxRates(limit?: number): Promise<FxRate[]>;
   getLatestFxRate(): Promise<FxRate | undefined>;
   createFxRate(data: InsertFxRate): Promise<FxRate>;
+
+  updateUserNotificationPrefs(userId: string, data: { phone?: string; whatsappPhone?: string; notificationPrefs?: Partial<NotificationPrefs> }): Promise<User | undefined>;
+  getSubscribedUsers(channel: "sms" | "whatsapp", alertType: keyof NotificationPrefs): Promise<User[]>;
+  createNotificationLog(data: Omit<NotificationLog, "id" | "createdAt">): Promise<NotificationLog>;
+  getNotificationLogs(userId: string, limit?: number): Promise<NotificationLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -215,6 +221,55 @@ export class DatabaseStorage implements IStorage {
   async createFxRate(data: InsertFxRate): Promise<FxRate> {
     const [created] = await db.insert(fxRates).values(data).returning();
     return created;
+  }
+
+  async updateUserNotificationPrefs(
+    userId: string,
+    data: { phone?: string; whatsappPhone?: string; notificationPrefs?: Partial<NotificationPrefs> }
+  ): Promise<User | undefined> {
+    const existing = await this.getUser(userId);
+    if (!existing) return undefined;
+
+    const updateData: Record<string, any> = {};
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.whatsappPhone !== undefined) updateData.whatsappPhone = data.whatsappPhone;
+    if (data.notificationPrefs) {
+      const current = (existing.notificationPrefs as NotificationPrefs) || {
+        smsEnabled: false, whatsappEnabled: false,
+        forecastAlerts: true, priceAlerts: true, refineryAlerts: true, morningDigest: false,
+      };
+      updateData.notificationPrefs = { ...current, ...data.notificationPrefs };
+    }
+
+    if (Object.keys(updateData).length === 0) return existing;
+
+    const [updated] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
+  async getSubscribedUsers(channel: "sms" | "whatsapp", alertType: keyof NotificationPrefs): Promise<User[]> {
+    const allUsers = await db.select().from(users);
+    return allUsers.filter((user) => {
+      const prefs = (user.notificationPrefs as NotificationPrefs) || null;
+      if (!prefs) return false;
+
+      if (channel === "sms") {
+        return prefs.smsEnabled && prefs[alertType] && !!user.phone;
+      }
+      return prefs.whatsappEnabled && prefs[alertType] && !!user.whatsappPhone;
+    });
+  }
+
+  async createNotificationLog(data: Omit<NotificationLog, "id" | "createdAt">): Promise<NotificationLog> {
+    const [created] = await db.insert(notificationLogs).values(data).returning();
+    return created;
+  }
+
+  async getNotificationLogs(userId: string, limit = 50): Promise<NotificationLog[]> {
+    return db.select().from(notificationLogs)
+      .where(eq(notificationLogs.userId, userId))
+      .orderBy(desc(notificationLogs.createdAt))
+      .limit(limit);
   }
 }
 

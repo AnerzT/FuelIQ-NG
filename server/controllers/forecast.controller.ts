@@ -4,6 +4,7 @@ import { insertForecastSchema } from "@shared/schema";
 import type { AuthRequest } from "../middleware/auth";
 import { computeForecast } from "../services/forecastEngine";
 import { computeForecastScore } from "../services/forecastScoring";
+import { onForecastCreated } from "../services/notificationOrchestrator";
 
 export async function getForecast(req: AuthRequest, res: Response) {
   try {
@@ -77,6 +78,10 @@ export async function generateForecast(req: AuthRequest, res: Response) {
       ...result,
     });
 
+    onForecastCreated(terminalId, forecast).catch((err) =>
+      console.error(`[Notify] Error in forecast notification: ${err.message}`)
+    );
+
     return res.status(201).json({
       success: true,
       message: "Forecast generated from market signals",
@@ -122,6 +127,10 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       confidence: score.confidence,
       suggestedAction: score.suggestedAction,
     });
+
+    onForecastCreated(terminalId, forecast).catch((err) =>
+      console.error(`[Notify] Error in score notification: ${err.message}`)
+    );
 
     return res.status(201).json({
       success: true,

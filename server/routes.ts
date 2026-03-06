@@ -24,6 +24,14 @@ import {
   triggerFxSignalUpdate,
   getMarketOverview,
 } from "./controllers/integrations.controller";
+import {
+  getNotificationPrefs,
+  updateNotificationPrefs,
+  getNotificationLogs,
+  getNotificationStatus,
+  triggerMorningDigest,
+  triggerTestNotification,
+} from "./controllers/notification.controller";
 import { seedDatabase, seedAdminUser } from "./seed";
 import { seedPrismaDatabase } from "./prisma-seed";
 import { storage } from "./storage";
@@ -69,6 +77,14 @@ export async function registerRoutes(
   app.post("/api/admin/sync/vessels", ...adminMiddleware, triggerVesselSignalUpdate);
   app.post("/api/admin/sync/fx", ...adminMiddleware, triggerFxSync);
   app.post("/api/admin/sync/fx-signals", ...adminMiddleware, triggerFxSignalUpdate);
+
+  app.get("/api/notifications/preferences", requireAuth, getNotificationPrefs);
+  app.patch("/api/notifications/preferences", requireAuth, updateNotificationPrefs);
+  app.get("/api/notifications/logs", requireAuth, getNotificationLogs);
+  app.get("/api/notifications/status", requireAuth, getNotificationStatus);
+  app.post("/api/notifications/test", requireAuth, triggerTestNotification);
+
+  app.post("/api/admin/notifications/morning-digest", ...adminMiddleware, triggerMorningDigest);
 
   return httpServer;
 }

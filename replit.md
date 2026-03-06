@@ -32,6 +32,12 @@ Generated client at `generated/prisma/`. Config at `prisma.config.ts`.
 - **RegulationUpdate**: id, title, summary, impactLevel (low|medium|high), effectiveDate, source, createdAt
 - **ExternalPriceFeed**: id, sourceName (NNPC|Dangote|Depot), price, terminalId (FK, optional), createdAt
 - **FxRate**: id, rate, source, createdAt
+- **NotificationLog**: id, userId (FK), channel (sms|whatsapp), alertType, message, status (pending|sent|failed), externalId, createdAt
+
+### User Model Extensions
+- `phone`: optional phone number for SMS alerts
+- `whatsappPhone`: optional WhatsApp number
+- `notificationPrefs`: JSONB with `smsEnabled`, `whatsappEnabled`, `forecastAlerts`, `priceAlerts`, `refineryAlerts`, `morningDigest`
 
 ## Seeded Terminals
 
@@ -85,6 +91,32 @@ Apapa (Lagos), Calabar (Cross River), Port Harcourt (Rivers), Warri (Delta), Onn
 - `server/services/nnpcService.ts` - NNPC PMS price feed (live API or simulated fallback), stores in ExternalPriceFeed, triggers forecast recalculation
 - `server/services/vesselTracking.ts` - Vessel tracking per terminal (MarineTraffic API or simulated), converts vessel counts to activity/supply pressure signals
 - `server/services/fxService.ts` - USD/NGN FX rate (exchangerate.host API or simulated), detects volatility, feeds fxPressure into signals
+- `server/services/smsService.ts` - SMS notifications via Twilio or Termii (auto-detects provider, simulated fallback)
+- `server/services/whatsappService.ts` - WhatsApp notifications via Meta Cloud API (simulated fallback)
+- `server/services/notificationOrchestrator.ts` - Orchestrates alerts: forecast bias changes, price spikes >₦10, refinery output drops, morning digests
+
+### Notification API Endpoints (authenticated)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notifications/preferences` | Get user's phone/WhatsApp/notification prefs |
+| PATCH | `/api/notifications/preferences` | Update phone, WhatsApp number, alert toggles |
+| GET | `/api/notifications/logs` | User's notification history |
+| GET | `/api/notifications/status` | SMS/WhatsApp provider configuration status |
+| POST | `/api/notifications/test` | Send test notification (body: `{channel:"sms"|"whatsapp"|"all"}`) |
+| POST | `/api/admin/notifications/morning-digest` | Trigger morning digest broadcast (admin) |
+
+### Optional Notification Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `TWILIO_PHONE_NUMBER` | Twilio sender phone number |
+| `TERMII_API_KEY` | Termii API key (alternative to Twilio) |
+| `TERMII_SENDER_ID` | Termii sender ID (default: FuelIQ) |
+| `WHATSAPP_TOKEN` | Meta WhatsApp Cloud API token |
+| `WHATSAPP_PHONE_ID` | WhatsApp Business phone number ID |
 
 ### Market Data API Endpoints (authenticated)
 
