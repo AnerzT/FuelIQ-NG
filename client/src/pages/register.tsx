@@ -13,11 +13,9 @@ export default function Register() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [form, setForm] = useState({
-    fullName: "",
-    username: "",
+    name: "",
     email: "",
     password: "",
-    company: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -56,25 +54,14 @@ export default function Register() {
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
+                <Label htmlFor="name">Full Name</Label>
                 <Input
-                  id="fullName"
+                  id="name"
                   placeholder="Adebayo Johnson"
-                  value={form.fullName}
-                  onChange={(e) => updateField("fullName", e.target.value)}
+                  value={form.name}
+                  onChange={(e) => updateField("name", e.target.value)}
                   required
-                  data-testid="input-fullname"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  placeholder="adebayo"
-                  value={form.username}
-                  onChange={(e) => updateField("username", e.target.value)}
-                  required
-                  data-testid="input-username"
+                  data-testid="input-name"
                 />
               </div>
               <div className="space-y-2">
@@ -87,16 +74,6 @@ export default function Register() {
                   onChange={(e) => updateField("email", e.target.value)}
                   required
                   data-testid="input-email"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company">Company (Optional)</Label>
-                <Input
-                  id="company"
-                  placeholder="Your company name"
-                  value={form.company}
-                  onChange={(e) => updateField("company", e.target.value)}
-                  data-testid="input-company"
                 />
               </div>
               <div className="space-y-2">
