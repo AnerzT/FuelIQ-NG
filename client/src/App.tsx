@@ -11,6 +11,7 @@ import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
 import Admin from "@/pages/admin";
 import SubscriptionPage from "@/pages/subscription";
+import PrivacyPolicy from "@/pages/privacy";
 import NotFound from "@/pages/not-found";
 
 function AppRoutes() {
@@ -24,6 +25,7 @@ function AppRoutes() {
         <Route path="/subscription" component={SubscriptionPage} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+        <Route path="/privacy" component={PrivacyPolicy} />
         <Route path="/">
           {user ? <Dashboard /> : <><Navbar /><Landing /></>}
         </Route>

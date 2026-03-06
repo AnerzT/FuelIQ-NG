@@ -8,6 +8,8 @@ import {
   setupHelmet,
   setupApiRateLimit,
   setupAuthRateLimit,
+  securityHeaders,
+  sanitizeInput,
   apiErrorHandler,
   notFoundHandler,
 } from "./middleware/production";
@@ -27,6 +29,7 @@ if (isProduction) {
 }
 
 app.use(setupHelmet());
+app.use(securityHeaders);
 app.use(setupCompression());
 app.use(setupCors());
 
@@ -43,6 +46,7 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+app.use(sanitizeInput);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

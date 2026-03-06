@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import {
   BarChart3,
   TrendingUp,
@@ -512,9 +512,14 @@ export default function Landing() {
               </div>
               <span className="text-sm font-semibold text-white">FuelIQ NG</span>
             </div>
-            <p className="text-sm text-slate-600">
-              &copy; 2026 FuelIQ NG. All rights reserved.
-            </p>
+            <div className="flex items-center gap-4">
+              <Link href="/privacy" className="text-sm text-slate-600 hover:text-slate-400 transition-colors" data-testid="link-privacy-footer">
+                Privacy Policy
+              </Link>
+              <p className="text-sm text-slate-600">
+                &copy; 2026 FuelIQ NG. All rights reserved.
+              </p>
+            </div>
           </div>
         </div>
       </footer>

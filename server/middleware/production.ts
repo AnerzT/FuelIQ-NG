@@ -37,7 +37,40 @@ export function setupHelmet() {
   return helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    frameguard: { action: "deny" },
   });
+}
+
+export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "0");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.removeHeader("X-Powered-By");
+  next();
+}
+
+export function sanitizeInput(req: Request, _res: Response, next: NextFunction) {
+  if (req.body && typeof req.body === "object") {
+    sanitizeObject(req.body);
+  }
+  next();
+}
+
+function sanitizeObject(obj: Record<string, any>) {
+  for (const key of Object.keys(obj)) {
+    if (typeof obj[key] === "string") {
+      obj[key] = obj[key].replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+    } else if (typeof obj[key] === "object" && obj[key] !== null) {
+      sanitizeObject(obj[key]);
+    }
+  }
 }
 
 export function setupApiRateLimit() {

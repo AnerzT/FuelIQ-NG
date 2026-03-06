@@ -4,6 +4,37 @@ import { storage } from "../storage";
 import { loginSchema, registerSchema } from "@shared/schema";
 import { generateToken, type AuthRequest } from "../middleware/auth";
 
+const loginAttempts = new Map<string, { count: number; lastAttempt: number; lockedUntil: number }>();
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000;
+
+function checkLockout(key: string): { locked: boolean; remainingMs: number } {
+  const entry = loginAttempts.get(key);
+  if (!entry) return { locked: false, remainingMs: 0 };
+  if (entry.lockedUntil > Date.now()) {
+    return { locked: true, remainingMs: entry.lockedUntil - Date.now() };
+  }
+  if (Date.now() - entry.lastAttempt > LOCKOUT_DURATION) {
+    loginAttempts.delete(key);
+    return { locked: false, remainingMs: 0 };
+  }
+  return { locked: false, remainingMs: 0 };
+}
+
+function recordFailedAttempt(key: string): void {
+  const entry = loginAttempts.get(key) || { count: 0, lastAttempt: 0, lockedUntil: 0 };
+  entry.count += 1;
+  entry.lastAttempt = Date.now();
+  if (entry.count >= LOCKOUT_THRESHOLD) {
+    entry.lockedUntil = Date.now() + LOCKOUT_DURATION;
+  }
+  loginAttempts.set(key, entry);
+}
+
+function clearAttempts(key: string): void {
+  loginAttempts.delete(key);
+}
+
 export async function register(req: Request, res: Response) {
   try {
     const parsed = registerSchema.safeParse(req.body);
@@ -16,6 +47,13 @@ export async function register(req: Request, res: Response) {
 
     const { name, email, password } = parsed.data;
 
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
+
     const existing = await storage.getUserByEmail(email);
     if (existing) {
       return res.status(409).json({
@@ -24,10 +62,10 @@ export async function register(req: Request, res: Response) {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const user = await storage.createUser({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
       role: "marketer",
     });
@@ -58,9 +96,21 @@ export async function login(req: Request, res: Response) {
     }
 
     const { email, password } = parsed.data;
+    const normalizedEmail = email.toLowerCase().trim();
+    const lockoutKey = normalizedEmail;
 
-    const user = await storage.getUserByEmail(email);
+    const lockout = checkLockout(lockoutKey);
+    if (lockout.locked) {
+      const minutes = Math.ceil(lockout.remainingMs / 60000);
+      return res.status(429).json({
+        success: false,
+        message: `Account temporarily locked. Try again in ${minutes} minute${minutes !== 1 ? "s" : ""}.`,
+      });
+    }
+
+    const user = await storage.getUserByEmail(normalizedEmail);
     if (!user) {
+      recordFailedAttempt(lockoutKey);
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
@@ -69,12 +119,14 @@ export async function login(req: Request, res: Response) {
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
+      recordFailedAttempt(lockoutKey);
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
 
+    clearAttempts(lockoutKey);
     const token = generateToken(user.id);
 
     return res.json({
