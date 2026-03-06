@@ -1,12 +1,14 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import {
   users, terminals, marketSignals, forecasts, priceHistory,
   refineryUpdates, regulationUpdates, externalPriceFeeds, fxRates, notificationLogs,
+  depots, depotPrices, inventory, transactions, traderSignals, hedgeRecommendations,
   type User, type InsertUser, type Terminal, type MarketSignal, type Forecast, type PriceHistoryEntry,
   type RefineryUpdate, type RegulationUpdate, type ExternalPriceFeed, type FxRate, type NotificationLog,
   type InsertRefineryUpdate, type InsertRegulationUpdate, type InsertExternalPriceFeed, type InsertFxRate,
   type NotificationPrefs,
+  type Depot, type DepotPrice, type Inventory, type Transaction, type TraderSignal, type HedgeRecommendation,
 } from "@shared/schema";
 
 if (!process.env.DATABASE_URL) {
@@ -24,13 +26,13 @@ export interface IStorage {
   getTerminal(id: string): Promise<Terminal | undefined>;
   getTerminalByCode(code: string): Promise<Terminal | undefined>;
 
-  getLatestSignal(terminalId: string): Promise<MarketSignal | undefined>;
+  getLatestSignal(terminalId: string, productType?: string): Promise<MarketSignal | undefined>;
   createSignal(signal: Omit<MarketSignal, "id" | "createdAt">): Promise<MarketSignal>;
 
-  getLatestForecast(terminalId: string): Promise<Forecast | undefined>;
+  getLatestForecast(terminalId: string, productType?: string): Promise<Forecast | undefined>;
   createForecast(forecast: Omit<Forecast, "id" | "createdAt">): Promise<Forecast>;
 
-  getPriceHistory(terminalId: string, limit?: number): Promise<PriceHistoryEntry[]>;
+  getPriceHistory(terminalId: string, limit?: number, productType?: string): Promise<PriceHistoryEntry[]>;
   createPriceHistory(entry: Omit<PriceHistoryEntry, "id">): Promise<PriceHistoryEntry>;
 
   updateTerminal(id: string, data: Partial<Pick<Terminal, "active" | "name" | "state">>): Promise<Terminal | undefined>;
@@ -62,6 +64,28 @@ export interface IStorage {
   incrementSmsCount(userId: string): Promise<void>;
   resetSmsCount(userId: string): Promise<void>;
   getAllUsers(): Promise<User[]>;
+
+  getDepots(terminalId?: string): Promise<(Depot & { terminalName?: string })[]>;
+  getDepot(id: string): Promise<Depot | undefined>;
+  createDepot(data: Omit<Depot, "id">): Promise<Depot>;
+
+  getDepotPrices(depotId?: string, productType?: string): Promise<(DepotPrice & { depotName?: string; terminalName?: string; terminalId?: string })[]>;
+  createDepotPrice(data: Omit<DepotPrice, "id">): Promise<DepotPrice>;
+  updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined>;
+
+  getInventory(userId: string, terminalId?: string, productType?: string): Promise<(Inventory & { terminalName?: string })[]>;
+  getInventoryItem(id: string): Promise<Inventory | undefined>;
+  createInventory(data: Omit<Inventory, "id" | "lastUpdated">): Promise<Inventory>;
+  updateInventory(id: string, data: Partial<Pick<Inventory, "volumeLitres" | "averageCost">>): Promise<Inventory | undefined>;
+
+  getTransactions(inventoryId: string, limit?: number): Promise<Transaction[]>;
+  createTransaction(data: Omit<Transaction, "id">): Promise<Transaction>;
+
+  getTraderSignals(terminalId?: string, limit?: number): Promise<(TraderSignal & { userName?: string })[]>;
+  createTraderSignal(data: Omit<TraderSignal, "id" | "createdAt">): Promise<TraderSignal>;
+
+  getHedgeRecommendations(userId: string, productType?: string, limit?: number): Promise<HedgeRecommendation[]>;
+  createHedgeRecommendation(data: Omit<HedgeRecommendation, "id" | "createdAt">): Promise<HedgeRecommendation>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -94,9 +118,11 @@ export class DatabaseStorage implements IStorage {
     return terminal;
   }
 
-  async getLatestSignal(terminalId: string): Promise<MarketSignal | undefined> {
+  async getLatestSignal(terminalId: string, productType?: string): Promise<MarketSignal | undefined> {
+    const conditions = [eq(marketSignals.terminalId, terminalId)];
+    if (productType) conditions.push(eq(marketSignals.productType, productType));
     const [signal] = await db.select().from(marketSignals)
-      .where(eq(marketSignals.terminalId, terminalId))
+      .where(and(...conditions))
       .orderBy(desc(marketSignals.createdAt))
       .limit(1);
     return signal;
@@ -107,9 +133,11 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getLatestForecast(terminalId: string): Promise<Forecast | undefined> {
+  async getLatestForecast(terminalId: string, productType?: string): Promise<Forecast | undefined> {
+    const conditions = [eq(forecasts.terminalId, terminalId)];
+    if (productType) conditions.push(eq(forecasts.productType, productType));
     const [forecast] = await db.select().from(forecasts)
-      .where(eq(forecasts.terminalId, terminalId))
+      .where(and(...conditions))
       .orderBy(desc(forecasts.createdAt))
       .limit(1);
     return forecast;
@@ -120,9 +148,11 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getPriceHistory(terminalId: string, limit = 30): Promise<PriceHistoryEntry[]> {
+  async getPriceHistory(terminalId: string, limit = 30, productType?: string): Promise<PriceHistoryEntry[]> {
+    const conditions = [eq(priceHistory.terminalId, terminalId)];
+    if (productType) conditions.push(eq(priceHistory.productType, productType));
     return db.select().from(priceHistory)
-      .where(eq(priceHistory.terminalId, terminalId))
+      .where(and(...conditions))
       .orderBy(desc(priceHistory.date))
       .limit(limit);
   }
@@ -142,11 +172,16 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: forecasts.id,
         terminalId: forecasts.terminalId,
+        productType: forecasts.productType,
         expectedMin: forecasts.expectedMin,
         expectedMax: forecasts.expectedMax,
         bias: forecasts.bias,
         confidence: forecasts.confidence,
         suggestedAction: forecasts.suggestedAction,
+        depotPrice: forecasts.depotPrice,
+        refineryInfluenceScore: forecasts.refineryInfluenceScore,
+        importParityPrice: forecasts.importParityPrice,
+        demandIndex: forecasts.demandIndex,
         createdAt: forecasts.createdAt,
         terminalName: terminals.name,
       })
@@ -162,11 +197,16 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: forecasts.id,
         terminalId: forecasts.terminalId,
+        productType: forecasts.productType,
         expectedMin: forecasts.expectedMin,
         expectedMax: forecasts.expectedMax,
         bias: forecasts.bias,
         confidence: forecasts.confidence,
         suggestedAction: forecasts.suggestedAction,
+        depotPrice: forecasts.depotPrice,
+        refineryInfluenceScore: forecasts.refineryInfluenceScore,
+        importParityPrice: forecasts.importParityPrice,
+        demandIndex: forecasts.demandIndex,
         createdAt: forecasts.createdAt,
         terminalName: terminals.name,
       })
@@ -323,6 +363,158 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getDepots(terminalId?: string): Promise<(Depot & { terminalName?: string })[]> {
+    const baseQuery = db.select({
+      id: depots.id,
+      name: depots.name,
+      terminalId: depots.terminalId,
+      owner: depots.owner,
+      active: depots.active,
+      terminalName: terminals.name,
+    }).from(depots).leftJoin(terminals, eq(depots.terminalId, terminals.id));
+
+    if (terminalId) {
+      return baseQuery.where(eq(depots.terminalId, terminalId));
+    }
+    return baseQuery;
+  }
+
+  async getDepot(id: string): Promise<Depot | undefined> {
+    const [depot] = await db.select().from(depots).where(eq(depots.id, id)).limit(1);
+    return depot;
+  }
+
+  async createDepot(data: Omit<Depot, "id">): Promise<Depot> {
+    const [created] = await db.insert(depots).values(data).returning();
+    return created;
+  }
+
+  async getDepotPrices(depotId?: string, productType?: string): Promise<(DepotPrice & { depotName?: string; terminalName?: string; terminalId?: string })[]> {
+    const conditions: any[] = [];
+    if (depotId) conditions.push(eq(depotPrices.depotId, depotId));
+    if (productType) conditions.push(eq(depotPrices.productType, productType));
+
+    const rows = await db.select({
+      id: depotPrices.id,
+      depotId: depotPrices.depotId,
+      productType: depotPrices.productType,
+      price: depotPrices.price,
+      updatedAt: depotPrices.updatedAt,
+      depotName: depots.name,
+      terminalName: terminals.name,
+      terminalId: depots.terminalId,
+    })
+    .from(depotPrices)
+    .leftJoin(depots, eq(depotPrices.depotId, depots.id))
+    .leftJoin(terminals, eq(depots.terminalId, terminals.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(depotPrices.price);
+
+    return rows;
+  }
+
+  async createDepotPrice(data: Omit<DepotPrice, "id">): Promise<DepotPrice> {
+    const [created] = await db.insert(depotPrices).values(data).returning();
+    return created;
+  }
+
+  async updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined> {
+    const [updated] = await db.update(depotPrices).set({ price, updatedAt: new Date() }).where(eq(depotPrices.id, id)).returning();
+    return updated;
+  }
+
+  async getInventory(userId: string, terminalId?: string, productType?: string): Promise<(Inventory & { terminalName?: string })[]> {
+    const conditions: any[] = [eq(inventory.userId, userId)];
+    if (terminalId) conditions.push(eq(inventory.terminalId, terminalId));
+    if (productType) conditions.push(eq(inventory.productType, productType));
+
+    return db.select({
+      id: inventory.id,
+      userId: inventory.userId,
+      terminalId: inventory.terminalId,
+      productType: inventory.productType,
+      volumeLitres: inventory.volumeLitres,
+      averageCost: inventory.averageCost,
+      lastUpdated: inventory.lastUpdated,
+      terminalName: terminals.name,
+    })
+    .from(inventory)
+    .leftJoin(terminals, eq(inventory.terminalId, terminals.id))
+    .where(and(...conditions));
+  }
+
+  async getInventoryItem(id: string): Promise<Inventory | undefined> {
+    const [item] = await db.select().from(inventory).where(eq(inventory.id, id)).limit(1);
+    return item;
+  }
+
+  async createInventory(data: Omit<Inventory, "id" | "lastUpdated">): Promise<Inventory> {
+    const [created] = await db.insert(inventory).values(data).returning();
+    return created;
+  }
+
+  async updateInventory(id: string, data: Partial<Pick<Inventory, "volumeLitres" | "averageCost">>): Promise<Inventory | undefined> {
+    const [updated] = await db.update(inventory).set({ ...data, lastUpdated: new Date() }).where(eq(inventory.id, id)).returning();
+    return updated;
+  }
+
+  async getTransactions(inventoryId: string, limit = 50): Promise<Transaction[]> {
+    return db.select().from(transactions)
+      .where(eq(transactions.inventoryId, inventoryId))
+      .orderBy(desc(transactions.date))
+      .limit(limit);
+  }
+
+  async createTransaction(data: Omit<Transaction, "id">): Promise<Transaction> {
+    const [created] = await db.insert(transactions).values(data).returning();
+    return created;
+  }
+
+  async getTraderSignals(terminalId?: string, limit = 50): Promise<(TraderSignal & { userName?: string })[]> {
+    const conditions: any[] = [];
+    if (terminalId) conditions.push(eq(traderSignals.terminalId, terminalId));
+
+    return db.select({
+      id: traderSignals.id,
+      userId: traderSignals.userId,
+      message: traderSignals.message,
+      sentimentScore: traderSignals.sentimentScore,
+      impactScore: traderSignals.impactScore,
+      terminalId: traderSignals.terminalId,
+      productType: traderSignals.productType,
+      detectedTerminal: traderSignals.detectedTerminal,
+      detectedProduct: traderSignals.detectedProduct,
+      keywords: traderSignals.keywords,
+      createdAt: traderSignals.createdAt,
+      userName: users.name,
+    })
+    .from(traderSignals)
+    .leftJoin(users, eq(traderSignals.userId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(traderSignals.createdAt))
+    .limit(limit);
+  }
+
+  async createTraderSignal(data: Omit<TraderSignal, "id" | "createdAt">): Promise<TraderSignal> {
+    const [created] = await db.insert(traderSignals).values(data).returning();
+    return created;
+  }
+
+  async getHedgeRecommendations(userId: string, productType?: string, limit = 20): Promise<HedgeRecommendation[]> {
+    const conditions: any[] = [eq(hedgeRecommendations.userId, userId)];
+    if (productType) conditions.push(eq(hedgeRecommendations.productType, productType));
+
+    return db.select().from(hedgeRecommendations)
+      .where(and(...conditions))
+      .orderBy(desc(hedgeRecommendations.createdAt))
+      .limit(limit);
+  }
+
+  async createHedgeRecommendation(data: Omit<HedgeRecommendation, "id" | "createdAt">): Promise<HedgeRecommendation> {
+    const [created] = await db.insert(hedgeRecommendations).values(data).returning();
+    return created;
   }
 }
 

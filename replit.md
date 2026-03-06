@@ -30,19 +30,25 @@ The FuelIQ NG platform is built with a modern, full-stack architecture.
 **Database:**
 -   **Type:** PostgreSQL
 -   **ORMs:** Drizzle ORM and Prisma ORM are both utilized for different sets of tables.
-    -   **Drizzle ORM:** Manages `users`, `terminals`, `market_signals`, `forecasts`, `price_history`.
+    -   **Drizzle ORM:** Manages `users`, `terminals`, `market_signals`, `forecasts`, `price_history`, `depots`, `depot_prices`, `inventory`, `transactions`, `trader_signals`, `hedge_recommendations`, `refinery_updates`, `regulation_updates`, `external_price_feeds`, `fx_rates`, `notification_logs`.
     -   **Prisma ORM:** Manages `prisma_users`, `prisma_terminals`, `prisma_market_signals`, `prisma_forecasts`, `prisma_price_history`. Both ORMs are initialized and seeded on startup.
 
 **Core Features & Functionality:**
 -   **User Management:** Includes user registration, login, profile management, and role-based access control (admin/marketer).
--   **Subscription Tiers:** Implements a tiered subscription model (Free, Pro, Enterprise) with enforced limits on terminals, forecasts, data delay, and notification services via backend middleware.
--   **Market Signals:** Captures and processes various market signals (vessel activity, truck queue, NNPC supply, FX pressure, policy risk).
+-   **Subscription Tiers:** Implements a tiered subscription model (Free, Pro, Enterprise) with enforced limits on terminals, products, forecasts, data delay, depot spread, inventory, hedge lab, trader signals, and notification services via backend middleware.
+-   **Multi-Product Support:** Supports 5 petroleum product types: PMS, AGO, JET_A1, ATK, LPG — each with product-specific forecast drivers, base prices, and weight profiles.
+-   **Market Signals:** Captures and processes various market signals (vessel activity, truck queue, NNPC supply, FX pressure, policy risk) per product type.
 -   **Forecast Engine:**
-    -   **Rules-Based Engine:** A legacy heuristic engine for backward compatibility, identifying bullish/bearish patterns.
-    -   **AI Scoring Engine:** The primary forecasting engine, using 9 normalized inputs (market signals, price trends, volatility, NNPC price changes) with adaptive weights to produce softmax probabilities for price increase, decrease, or stability. It also calculates confidence levels and suggested actions.
--   **Price History:** Tracks and displays historical petroleum product prices for different terminals.
+    -   **Rules-Based Engine:** Product-aware heuristic engine with product-specific weights/base prices.
+    -   **AI Scoring Engine:** Multi-product forecasting engine with 9 normalized inputs, product-specific adaptive weights, softmax probabilities, and enriched output (depotPrice, refineryInfluenceScore, importParityPrice, demandIndex).
+-   **Depot Price Comparison:** Matrix view of depot prices across terminals and products with lowest price highlight, spread calculation, and arbitrage % opportunity.
+-   **Inventory Management:** Track tank stock per terminal/product, unrealized P&L, BUY/SELL transactions with weighted-average cost recalculation, restock alerts.
+-   **Trader Chat Intelligence:** Free-text market intel from traders with automatic keyword extraction, sentiment scoring, terminal/product detection.
+-   **Hedge Strategy Lab:** Forward Buying, Staggered Buying, and Margin Protection strategies with risk assessment and expected margin impact.
+-   **Price History:** Tracks and displays historical petroleum product prices for different terminals by product type.
 -   **Notifications:** Supports SMS and WhatsApp notifications for forecast alerts, price spikes, refinery updates, and morning digests, configurable by the user based on their subscription tier.
--   **Admin Panel:** Provides administrative functionalities for managing users, subscriptions, terminals, and triggering data synchronization.
+-   **Admin Panel:** Provides administrative functionalities for managing users, subscriptions, terminals, depots, and triggering data synchronization.
+-   **Advanced Dashboard:** 7-tab layout: Overview, Products, Depot Spread, Inventory, Hedge Lab, Trader Signals, Refinery Intel.
 
 ## External Dependencies
 

@@ -6,7 +6,7 @@ import { computeForecast } from "../services/forecastEngine";
 import { computeForecastScore } from "../services/forecastScoring";
 import { onForecastCreated } from "../services/notificationOrchestrator";
 
-export async function getForecast(req: AuthRequest, res: Response) {
+export async function getMultiProductForecasts(req: AuthRequest, res: Response) {
   try {
     const { terminalId } = req.params;
 
@@ -15,7 +15,34 @@ export async function getForecast(req: AuthRequest, res: Response) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    const forecast = await storage.getLatestForecast(terminalId);
+    const products = ["PMS", "AGO", "JET_A1", "ATK", "LPG"];
+    const forecasts = await Promise.all(
+      products.map(async (pt) => {
+        const forecast = await storage.getLatestForecast(terminalId, pt);
+        return forecast;
+      })
+    );
+
+    return res.json({
+      success: true,
+      data: forecasts.filter(Boolean),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getForecast(req: AuthRequest, res: Response) {
+  try {
+    const { terminalId } = req.params;
+    const productType = typeof req.query.productType === "string" ? req.query.productType : undefined;
+
+    const terminal = await storage.getTerminal(terminalId);
+    if (!terminal) {
+      return res.status(404).json({ success: false, message: "Terminal not found" });
+    }
+
+    const forecast = await storage.getLatestForecast(terminalId, productType);
     if (!forecast) {
       return res.status(404).json({ success: false, message: "No forecast available for this terminal" });
     }
@@ -44,7 +71,11 @@ export async function createForecast(req: AuthRequest, res: Response) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    const forecast = await storage.createForecast(parsed.data);
+    const forecastData = {
+      ...parsed.data,
+      productType: parsed.data.productType || "PMS",
+    };
+    const forecast = await storage.createForecast(forecastData as any);
 
     return res.status(201).json({
       success: true,
@@ -59,22 +90,24 @@ export async function createForecast(req: AuthRequest, res: Response) {
 export async function generateForecast(req: AuthRequest, res: Response) {
   try {
     const { terminalId } = req.params;
+    const productType = typeof req.query.productType === "string" ? req.query.productType : "PMS";
 
     const terminal = await storage.getTerminal(terminalId);
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    const signal = await storage.getLatestSignal(terminalId);
+    const signal = await storage.getLatestSignal(terminalId, productType);
     if (!signal) {
       return res.status(400).json({ success: false, message: "No market signals available to generate forecast" });
     }
 
-    const history = await storage.getPriceHistory(terminalId, 30);
-    const result = computeForecast(signal, history);
+    const history = await storage.getPriceHistory(terminalId, 30, productType);
+    const result = computeForecast(signal, history, productType);
 
     const forecast = await storage.createForecast({
       terminalId,
+      productType,
       ...result,
     });
 
@@ -97,19 +130,20 @@ export async function generateForecast(req: AuthRequest, res: Response) {
 export async function scoreForecast(req: AuthRequest, res: Response) {
   try {
     const { terminalId } = req.params;
+    const productType = typeof req.query.productType === "string" ? req.query.productType : "PMS";
 
     const terminal = await storage.getTerminal(terminalId);
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    const signal = await storage.getLatestSignal(terminalId);
+    const signal = await storage.getLatestSignal(terminalId, productType);
     if (!signal) {
       return res.status(400).json({ success: false, message: "No market signals available for scoring" });
     }
 
     const [history, nnpcFeeds, fxRates] = await Promise.all([
-      storage.getPriceHistory(terminalId, 30),
+      storage.getPriceHistory(terminalId, 30, productType),
       storage.getExternalPriceFeedBySource("NNPC", 1),
       storage.getFxRates(10),
     ]);
@@ -119,10 +153,12 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       priceHistory: history,
       nnpcFeed: nnpcFeeds[0] ?? null,
       fxRates,
+      productType,
     });
 
     const forecast = await storage.createForecast({
       terminalId,
+      productType,
       expectedMin: score.expectedRange.min,
       expectedMax: score.expectedRange.max,
       bias: score.bias,

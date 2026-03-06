@@ -1,5 +1,5 @@
 import { db } from "./storage";
-import { users, terminals, marketSignals, forecasts, priceHistory } from "@shared/schema";
+import { users, terminals, marketSignals, forecasts, priceHistory, depots, depotPrices } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -82,7 +82,84 @@ export async function seedDatabase() {
     });
     console.log("Admin user seeded.");
   }
+
+  await seedDepotsAndPrices();
 }
+
+const DEPOT_SEEDS: Record<string, { name: string; owner: string }[]> = {
+  APA: [
+    { name: "MRS Apapa Depot", owner: "MRS Oil" },
+    { name: "Conoil Apapa Depot", owner: "Conoil" },
+    { name: "Forte Oil Apapa", owner: "Ardova (Forte Oil)" },
+  ],
+  PHC: [
+    { name: "Indorama PH Depot", owner: "Indorama" },
+    { name: "MRS PH Depot", owner: "MRS Oil" },
+  ],
+  WAR: [
+    { name: "PPMC Warri Depot", owner: "NNPC/PPMC" },
+    { name: "Rainoil Warri Depot", owner: "Rainoil" },
+  ],
+  ATC: [
+    { name: "Atlas Cove Jetty Depot", owner: "NNPC/PPMC" },
+  ],
+  IJG: [
+    { name: "Techno Oil Ijegun", owner: "Techno Oil" },
+    { name: "Masters Energy Ijegun", owner: "Masters Energy" },
+  ],
+  ONN: [
+    { name: "Brawal Oil Onne", owner: "Brawal Oil" },
+  ],
+};
+
+const PRODUCT_BASE_PRICES: Record<string, number> = {
+  PMS: 620,
+  AGO: 950,
+  JET_A1: 880,
+  ATK: 870,
+  LPG: 1100,
+};
+
+async function seedDepotsAndPrices() {
+  const existingDepots = await db.select().from(depots);
+  if (existingDepots.length > 0) {
+    console.log("Depots already seeded, skipping.");
+    return;
+  }
+
+  console.log("Seeding depots and depot prices...");
+  const allTerminals = await db.select().from(terminals);
+  const terminalMap = new Map(allTerminals.map((t) => [t.code, t.id]));
+
+  for (const [code, depotList] of Object.entries(DEPOT_SEEDS)) {
+    const terminalId = terminalMap.get(code);
+    if (!terminalId) continue;
+
+    for (const d of depotList) {
+      const [depot] = await db.insert(depots).values({
+        name: d.name,
+        terminalId,
+        owner: d.owner,
+        active: true,
+      }).returning();
+
+      for (const [productType, basePrice] of Object.entries(PRODUCT_BASE_PRICES)) {
+        const variation = (Math.random() - 0.5) * 40;
+        const price = Math.round(basePrice + variation);
+        await db.insert(depotPrices).values({
+          depotId: depot.id,
+          productType,
+          price,
+          updatedAt: new Date(),
+        });
+      }
+    }
+  }
+
+  console.log("Depots and depot prices seeded successfully.");
+}
+
+export { seedDepotsAndPrices };
 
 export async function seedAdminUser() {
   const existingAdmin = await db.select().from(users).where(eq(users.email, "admin@fueliq.ng"));

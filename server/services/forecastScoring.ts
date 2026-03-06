@@ -1,10 +1,11 @@
-import type { MarketSignal, PriceHistoryEntry, ExternalPriceFeed, FxRate } from "@shared/schema";
+import type { MarketSignal, PriceHistoryEntry, ExternalPriceFeed, FxRate, ProductType } from "@shared/schema";
 
 export interface ScoringInput {
   signal: MarketSignal;
   priceHistory: PriceHistoryEntry[];
   nnpcFeed?: ExternalPriceFeed | null;
   fxRates?: FxRate[];
+  productType?: string;
 }
 
 export interface ProbabilityDistribution {
@@ -71,6 +72,58 @@ const BASE_WEIGHTS: SignalWeights = {
   fxVolatility:    0.05,
   nnpcPriceChange: 0.03,
 };
+
+const PRODUCT_WEIGHTS: Record<string, SignalWeights> = {
+  PMS: { ...BASE_WEIGHTS },
+  AGO: {
+    vesselActivity: -0.12,
+    truckQueue:      0.10,
+    nnpcSupply:      0.10,
+    fxPressure:      0.25,
+    policyRisk:      0.08,
+    priceTrend:      0.12,
+    priceVolatility: 0.08,
+    fxVolatility:    0.10,
+    nnpcPriceChange: 0.05,
+  },
+  JET_A1: {
+    vesselActivity: -0.15,
+    truckQueue:      0.08,
+    nnpcSupply:      0.10,
+    fxPressure:      0.20,
+    policyRisk:      0.12,
+    priceTrend:      0.15,
+    priceVolatility: 0.06,
+    fxVolatility:    0.08,
+    nnpcPriceChange: 0.06,
+  },
+  ATK: {
+    vesselActivity: -0.15,
+    truckQueue:      0.06,
+    nnpcSupply:      0.10,
+    fxPressure:      0.18,
+    policyRisk:      0.12,
+    priceTrend:      0.15,
+    priceVolatility: 0.08,
+    fxVolatility:    0.08,
+    nnpcPriceChange: 0.08,
+  },
+  LPG: {
+    vesselActivity: -0.25,
+    truckQueue:      0.08,
+    nnpcSupply:      0.15,
+    fxPressure:      0.10,
+    policyRisk:      0.08,
+    priceTrend:      0.12,
+    priceVolatility: 0.08,
+    fxVolatility:    0.06,
+    nnpcPriceChange: 0.08,
+  },
+};
+
+function getProductWeights(productType?: string): SignalWeights {
+  return PRODUCT_WEIGHTS[productType || "PMS"] || BASE_WEIGHTS;
+}
 
 function normalizeLevel(value: string): string {
   const v = value.trim();
@@ -177,8 +230,8 @@ function computeCompositeScore(inputs: NormalizedInputs, weights: SignalWeights)
   return score;
 }
 
-function computeAdaptiveWeights(inputs: NormalizedInputs): SignalWeights {
-  const weights = { ...BASE_WEIGHTS };
+function computeAdaptiveWeights(inputs: NormalizedInputs, productType?: string): SignalWeights {
+  const weights = { ...getProductWeights(productType) };
 
   if (inputs.priceVolatility > 0.7) {
     weights.priceTrend *= 1.4;
@@ -278,17 +331,25 @@ function determineBias(probabilities: ProbabilityDistribution): "bullish" | "bea
   return "neutral";
 }
 
+const PRODUCT_DEFAULT_RANGES: Record<string, { min: number; max: number }> = {
+  PMS:    { min: 610, max: 625 },
+  AGO:    { min: 950, max: 980 },
+  JET_A1: { min: 1050, max: 1100 },
+  ATK:    { min: 1000, max: 1060 },
+  LPG:    { min: 800, max: 850 },
+};
+
 function computeExpectedRange(
   priceHistory: PriceHistoryEntry[],
   bias: "bullish" | "bearish" | "neutral",
   compositeScore: number,
-  inputs: NormalizedInputs
+  inputs: NormalizedInputs,
+  productType?: string
 ): { min: number; max: number } {
-  const DEFAULT_MIN = 610;
-  const DEFAULT_MAX = 625;
+  const defaults = PRODUCT_DEFAULT_RANGES[productType || "PMS"] || PRODUCT_DEFAULT_RANGES.PMS;
 
   if (priceHistory.length === 0) {
-    return { min: DEFAULT_MIN, max: DEFAULT_MAX };
+    return { min: defaults.min, max: defaults.max };
   }
 
   const sorted = [...priceHistory].sort(
@@ -323,35 +384,50 @@ function computeExpectedRange(
 function generateAction(
   bias: "bullish" | "bearish" | "neutral",
   probabilities: ProbabilityDistribution,
-  inputs: NormalizedInputs
+  inputs: NormalizedInputs,
+  productType?: string
 ): string {
   const actions: string[] = [];
   const maxProb = Math.max(probabilities.increase, probabilities.decrease, probabilities.stable);
+  const pt = productType || "PMS";
+
+  const productLabels: Record<string, string> = {
+    PMS: "PMS", AGO: "Diesel (AGO)", JET_A1: "Jet A-1", ATK: "ATK", LPG: "LPG",
+  };
+  const label = productLabels[pt] || "PMS";
 
   if (bias === "bullish") {
     if (maxProb > 60) {
-      actions.push(`${probabilities.increase}% chance of price increase — secure supply now`);
+      actions.push(`${probabilities.increase}% chance of ${label} price increase — secure supply now`);
     } else {
-      actions.push("Price increase likely — consider early procurement");
+      actions.push(`${label} price increase likely — consider early procurement`);
     }
 
-    if (inputs.truckQueue > 0.7) actions.push("Load before 6am to beat truck congestion");
-    if (inputs.nnpcSupply > 0.7) actions.push("NNPC supply tightening — avoid spot buying after 9am");
-    if (inputs.fxPressure > 0.7) actions.push("FX pressure rising — lock in prices early");
-    if (inputs.vesselActivity < 0.3) actions.push("Low vessel activity — supply constraints expected");
+    if (pt === "AGO" && inputs.fxPressure > 0.7) {
+      actions.push("FX-driven diesel cost increase — lock in AGO rates immediately");
+    } else if ((pt === "JET_A1" || pt === "ATK") && inputs.fxPressure > 0.7) {
+      actions.push(`Crude-linked ${label} pricing under FX pressure — act now`);
+    } else if (pt === "LPG" && inputs.vesselActivity < 0.3) {
+      actions.push("No LPG vessel arrivals — supply constraints imminent");
+    } else {
+      if (inputs.truckQueue > 0.7) actions.push("Load before 6am to beat truck congestion");
+      if (inputs.nnpcSupply > 0.7) actions.push("Supply tightening — avoid spot buying after 9am");
+      if (inputs.fxPressure > 0.7) actions.push("FX pressure rising — lock in prices early");
+    }
+    if (inputs.vesselActivity < 0.3) actions.push(`Low vessel activity — ${label} supply constraints expected`);
   } else if (bias === "bearish") {
     if (maxProb > 60) {
-      actions.push(`${probabilities.decrease}% chance of price drop — delay purchases`);
+      actions.push(`${probabilities.decrease}% chance of ${label} price drop — delay purchases`);
     } else {
-      actions.push("Price drop likely — consider waiting for lower prices");
+      actions.push(`${label} price drop likely — consider waiting for lower prices`);
     }
 
     if (inputs.vesselActivity > 0.7) actions.push("Incoming vessels will increase supply");
-    if (inputs.nnpcSupply < 0.3) actions.push("NNPC supply strong — prices likely to ease");
-    actions.push("Monitor market for further drops before loading");
+    if (inputs.nnpcSupply < 0.3) actions.push("Supply strong — prices likely to ease");
+    actions.push(`Monitor ${label} market for further drops before loading`);
   } else {
-    actions.push("Market stable — standard loading operations advised");
-    if (inputs.priceVolatility > 0.6) actions.push("Elevated volatility — consider hedging positions");
+    actions.push(`${label} market stable — standard operations advised`);
+    if (inputs.priceVolatility > 0.6) actions.push(`Elevated ${label} volatility — consider hedging positions`);
     if (inputs.truckQueue > 0.7) actions.push("Load at off-peak hours to avoid delays");
     else actions.push("Hold current stock and monitor market closely");
   }
@@ -360,8 +436,9 @@ function generateAction(
 }
 
 export function computeForecastScore(input: ScoringInput): ForecastScore {
+  const pt = input.productType || input.signal.productType || "PMS";
   const normalizedInputs = normalizeInputs(input);
-  const adaptiveWeights = computeAdaptiveWeights(normalizedInputs);
+  const adaptiveWeights = computeAdaptiveWeights(normalizedInputs, pt);
   const compositeScore = computeCompositeScore(normalizedInputs, adaptiveWeights);
 
   const trendScore = normalizedInputs.priceTrend;
@@ -374,9 +451,10 @@ export function computeForecastScore(input: ScoringInput): ForecastScore {
     input.priceHistory,
     bias,
     compositeScore,
-    normalizedInputs
+    normalizedInputs,
+    pt
   );
-  const suggestedAction = generateAction(bias, probabilities, normalizedInputs);
+  const suggestedAction = generateAction(bias, probabilities, normalizedInputs, pt);
 
   return {
     bias,

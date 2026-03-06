@@ -39,9 +39,14 @@ const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: 
 
 const featureLabels: { key: string; label: string }[] = [
   { key: "maxTerminals", label: "Terminal access" },
+  { key: "maxProducts", label: "Product types" },
   { key: "forecastsPerDay", label: "Forecasts per day" },
   { key: "dataDelay", label: "Data freshness" },
   { key: "aiProbability", label: "AI probability engine" },
+  { key: "depotSpread", label: "Depot spread view" },
+  { key: "inventoryAccess", label: "Inventory management" },
+  { key: "hedgeLab", label: "Hedge strategy lab" },
+  { key: "traderSignals", label: "Trader chat intel" },
   { key: "smsAlertsPerWeek", label: "SMS alerts" },
   { key: "whatsappDigest", label: "WhatsApp digest" },
   { key: "refineryUpdates", label: "Refinery updates" },
@@ -56,6 +61,7 @@ const featureLabels: { key: string; label: string }[] = [
 function formatFeatureValue(key: string, value: any): { text: string; available: boolean } {
   if (typeof value === "boolean") return { text: value ? "Yes" : "No", available: value };
   if (key === "maxTerminals") return value === Infinity ? { text: "Unlimited", available: true } : { text: `${value} terminal`, available: true };
+  if (key === "maxProducts") return value === Infinity ? { text: "All (PMS, AGO, JET, ATK, LPG)", available: true } : { text: `${value} product (PMS only)`, available: true };
   if (key === "forecastsPerDay") return value === Infinity ? { text: "Unlimited", available: true } : { text: `${value} per day`, available: true };
   if (key === "dataDelay") return value === 0 ? { text: "Real-time", available: true } : { text: `${value}h delayed`, available: false };
   if (key === "smsAlertsPerWeek") {

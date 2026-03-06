@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth";
 import { register, login, getMe } from "./controllers/auth.controller";
 import { getTerminals } from "./controllers/terminal.controller";
-import { getForecast, createForecast, generateForecast, scoreForecast } from "./controllers/forecast.controller";
+import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast } from "./controllers/forecast.controller";
 import { getSignals, createSignal } from "./controllers/signal.controller";
 import { getPriceHistory } from "./controllers/price-history.controller";
 import {
@@ -39,8 +39,31 @@ import {
   adminGetAllSubscriptions,
   adminUpdateSubscription,
 } from "./controllers/subscription.controller";
+import {
+  getDepots,
+  getDepot,
+  createDepot,
+  getDepotPrices,
+  createDepotPrice,
+  updateDepotPrice,
+} from "./controllers/depot.controller";
+import {
+  getInventory,
+  getInventoryWithPnL,
+  createInventory,
+  createTransaction,
+  getTransactions,
+} from "./controllers/inventory.controller";
+import {
+  getTraderSignals,
+  submitTraderSignal,
+} from "./controllers/traderSignal.controller";
+import {
+  getHedgeRecommendations,
+  generateHedgeRecommendations,
+} from "./controllers/hedge.controller";
 import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard";
-import { seedDatabase, seedAdminUser } from "./seed";
+import { seedDatabase, seedAdminUser, seedDepotsAndPrices } from "./seed";
 import { seedPrismaDatabase } from "./prisma-seed";
 import { storage } from "./storage";
 
@@ -51,6 +74,7 @@ export async function registerRoutes(
   await seedDatabase();
   await seedAdminUser();
   await seedPrismaDatabase();
+  await seedDepotsAndPrices();
 
   const withTier = [requireAuth, attachUserRole(storage)];
 
@@ -60,6 +84,7 @@ export async function registerRoutes(
 
   app.get("/api/terminals", requireAuth, getTerminals);
 
+  app.get("/api/forecast/multi/:terminalId", ...withTier, getMultiProductForecasts);
   app.get("/api/forecast/:terminalId", ...withTier, requireTerminalAccess(), withDataDelay(), getForecast);
   app.post("/api/forecast", ...withTier, requireForecastQuota(), createForecast);
   app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast);
@@ -102,6 +127,25 @@ export async function registerRoutes(
 
   app.get("/api/admin/subscriptions", ...adminMiddleware, adminGetAllSubscriptions);
   app.patch("/api/admin/subscriptions/:userId", ...adminMiddleware, adminUpdateSubscription);
+
+  app.get("/api/depots", ...withTier, requireTier("pro"), getDepots);
+  app.get("/api/depots/:id", ...withTier, requireTier("pro"), getDepot);
+  app.post("/api/depots", ...adminMiddleware, createDepot);
+  app.get("/api/depot-prices", ...withTier, requireTier("pro"), getDepotPrices);
+  app.post("/api/depot-prices", ...adminMiddleware, createDepotPrice);
+  app.patch("/api/depot-prices/:id", ...adminMiddleware, updateDepotPrice);
+
+  app.get("/api/inventory", ...withTier, requireTier("pro"), getInventory);
+  app.get("/api/inventory/pnl", ...withTier, requireTier("pro"), getInventoryWithPnL);
+  app.post("/api/inventory", ...withTier, requireTier("pro"), createInventory);
+  app.post("/api/inventory/transactions", ...withTier, requireTier("pro"), createTransaction);
+  app.get("/api/inventory/:inventoryId/transactions", ...withTier, requireTier("pro"), getTransactions);
+
+  app.get("/api/trader-signals", ...withTier, requireTier("pro"), getTraderSignals);
+  app.post("/api/trader-signals", ...withTier, requireTier("pro"), submitTraderSignal);
+
+  app.get("/api/hedge", ...withTier, requireTier("pro"), getHedgeRecommendations);
+  app.post("/api/hedge/generate", ...withTier, requireTier("pro"), generateHedgeRecommendations);
 
   return httpServer;
 }

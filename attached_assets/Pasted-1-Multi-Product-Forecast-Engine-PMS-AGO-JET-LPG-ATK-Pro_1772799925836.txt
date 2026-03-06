@@ -1,0 +1,311 @@
+1️⃣ Multi-Product Forecast Engine (PMS + AGO + JET + LPG + ATK)
+🛢 Products to Support
+
+PMS
+
+AGO (Diesel)
+
+JET A1
+
+ATK (Aviation Turbine Kerosene)
+
+LPG
+
+🔧 Update Database Schema (Prisma)
+Prompt for Replit Agent
+Update Forecast model:
+
+Add:
+
+- productType (PMS | AGO | JET_A1 | ATK | LPG)
+- depotPrice
+- refineryInfluenceScore
+- importParityPrice
+- demandIndex
+🧠 Product-Specific Forecast Logic
+
+Different drivers per product:
+
+PMS
+
+Dangote output
+
+Import parity
+
+Government policy
+
+AGO
+
+Industrial demand
+
+FX volatility
+
+Power outages
+
+JET A1 / ATK
+
+Airline demand
+
+International crude trend
+
+Airport traffic volume
+
+LPG
+
+Household demand
+
+Seasonal weather
+
+Import vessel timing
+
+AI Upgrade Prompt
+Create multi-product AI forecast model:
+
+Inputs:
+- FX volatility
+- Vessel arrivals
+- Refinery output
+- Depot spread
+- Historical product volatility
+- Demand index
+
+Output:
+{
+  productType,
+  bias,
+  probability,
+  expectedRange,
+  confidenceScore
+}
+2️⃣ Depot Price Comparison Engine
+
+Now marketers can compare:
+
+Apapa depot prices
+
+Warri depot prices
+
+Port Harcourt depots
+
+Calabar depots
+
+🧱 New Model
+Depot:
+- id
+- name
+- terminalId
+- owner
+- active
+
+DepotPrice:
+- id
+- depotId
+- productType
+- price
+- updatedAt
+API
+GET /api/depot-prices?product=PMS
+GET /api/depot-prices?terminal=warri
+Frontend Feature
+
+Dashboard Tab:
+
+📊 “Depot Spread View”
+
+Show:
+
+Depot	PMS	AGO	LPG
+Matrix	620	890	1100
+Aiteo	625	880	1090
+
+Add:
+
+Lowest price highlight
+
+Spread difference calculation
+
+% arbitrage opportunity
+
+3️⃣ Inventory Management Module
+
+Now you’re becoming operational software.
+
+🧱 Database Model
+Inventory:
+- id
+- userId
+- terminalId
+- productType
+- volumeLitres
+- averageCost
+- lastUpdated
+
+Transaction:
+- id
+- inventoryId
+- type (BUY | SELL)
+- volume
+- price
+- date
+Features
+
+Marketer can:
+
+Track tank stock
+
+See unrealized profit/loss
+
+Get restock alerts
+
+Forecast margin risk
+
+Smart Feature
+
+Add:
+
+If forecast predicts price increase AND
+inventory < threshold
+→ send restock alert
+4️⃣ Trader Chat Intelligence (AI-Powered)
+
+This is powerful.
+
+Marketers talk in WhatsApp groups like:
+
+“Warri queue heavy o”
+“Dangote reducing output”
+“Depot don increase price”
+
+We capture intelligence from trader inputs.
+
+🧱 Model
+TraderSignal:
+- id
+- message
+- sentimentScore
+- impactScore
+- terminalId
+- productType
+- createdAt
+AI Processing
+
+Use:
+
+OpenAI for NLP
+
+Sentiment scoring
+
+Extract keywords:
+
+"queue"
+
+"strike"
+
+"price hike"
+
+"import delay"
+
+Prompt
+Create AI chat analyzer:
+
+Input:
+Free-text trader message.
+
+Output:
+{
+  detectedTerminal,
+  productType,
+  sentiment,
+  marketImpactScore
+}
+5️⃣ Hedge Strategy Module
+
+Now this is elite.
+
+Purpose
+
+Help marketers:
+
+Lock profit margins
+
+Avoid FX shocks
+
+Time bulk purchases
+
+Hedge Strategies to Include
+1️⃣ Forward Buying Strategy
+
+If:
+
+FX rising
+
+Refinery output falling
+
+Vessel delays high
+
+→ Suggest bulk purchase today
+
+2️⃣ Staggered Buying Strategy
+
+Buy:
+
+40% today
+
+30% in 3 days
+
+30% next week
+
+Based on forecast volatility score.
+
+3️⃣ Margin Protection Strategy
+
+If:
+Inventory cost = 620
+Forecast drop to 590
+
+→ Suggest offloading % of stock.
+
+🧱 Hedge Model
+HedgeRecommendation:
+- id
+- userId
+- productType
+- strategyType
+- reasoning
+- riskLevel
+- expectedMarginImpact
+- createdAt
+6️⃣ Advanced Dashboard Layout
+
+Add tabs:
+
+Overview
+
+Products
+
+Depot Spread
+
+Inventory
+
+Hedge Lab
+
+Trader Signals
+
+Refinery Intel
+
+Make it SaaS-level clean.
+
+7️⃣ Revenue Upgrade (New Pricing)
+
+Now you’re selling intelligence + operations.
+
+Updated Pricing
+🟢 FREE
+
+1 product
+
+1 terminal
+
+No inventory
+
+No hedge lab
