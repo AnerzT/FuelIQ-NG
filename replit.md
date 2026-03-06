@@ -78,9 +78,42 @@ Apapa (Lagos), Calabar (Cross River), Port Harcourt (Rivers), Warri (Delta), Onn
 - `server/controllers/forecast.controller.ts` - GET/POST/generate forecast handlers
 - `server/controllers/signal.controller.ts` - GET/POST signal handlers
 - `server/controllers/price-history.controller.ts` - GET price history handler
-- `server/services/forecastEngine.ts` - Reusable forecast calculation service
-- `server/routes.ts` - Route registration (thin, imports controllers + middleware)
-- `server/storage.ts` - Database storage layer (Drizzle/PostgreSQL)
+- `server/controllers/integrations.controller.ts` - External API integration endpoints
+
+### External API Integration Services
+
+- `server/services/nnpcService.ts` - NNPC PMS price feed (live API or simulated fallback), stores in ExternalPriceFeed, triggers forecast recalculation
+- `server/services/vesselTracking.ts` - Vessel tracking per terminal (MarineTraffic API or simulated), converts vessel counts to activity/supply pressure signals
+- `server/services/fxService.ts` - USD/NGN FX rate (exchangerate.host API or simulated), detects volatility, feeds fxPressure into signals
+
+### Market Data API Endpoints (authenticated)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/market/overview` | Combined market overview (NNPC price, FX rate, vessel summary) |
+| GET | `/api/market/nnpc` | Latest NNPC price feed history |
+| GET | `/api/market/fx` | FX rate with volatility analysis |
+| GET | `/api/market/vessels` | Live vessel tracking for all terminals |
+
+### Admin Sync Endpoints (admin only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/sync/nnpc` | Sync NNPC price feed |
+| POST | `/api/admin/sync/nnpc-recalculate` | Sync NNPC + recalculate all forecasts |
+| POST | `/api/admin/sync/vessels` | Sync vessel data + update terminal signals |
+| POST | `/api/admin/sync/fx` | Sync FX rate |
+| POST | `/api/admin/sync/fx-signals` | Sync FX + update fxPressure signals |
+
+### Optional Environment Variables for Live APIs
+
+| Variable | Description |
+|----------|-------------|
+| `NNPC_API_URL` | NNPC price feed API URL (falls back to simulation) |
+| `VESSEL_API_KEY` | MarineTraffic API key (falls back to simulation) |
+| `VESSEL_API_URL` | Custom vessel tracking API URL |
+| `FX_API_KEY` | exchangerate.host API key (falls back to simulation) |
+| `FX_API_URL` | Custom FX rate API URL |
 
 ## Forecast Engine (`server/services/forecastEngine.ts`)
 

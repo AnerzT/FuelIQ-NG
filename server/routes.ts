@@ -13,6 +13,17 @@ import {
   adminUpdateSignal,
   adminGetForecasts,
 } from "./controllers/admin.controller";
+import {
+  getNnpcPrice,
+  triggerNnpcSync,
+  triggerNnpcSyncAndRecalculate,
+  getVesselTracking,
+  triggerVesselSignalUpdate,
+  getFxRate,
+  triggerFxSync,
+  triggerFxSignalUpdate,
+  getMarketOverview,
+} from "./controllers/integrations.controller";
 import { seedDatabase, seedAdminUser } from "./seed";
 import { seedPrismaDatabase } from "./prisma-seed";
 import { storage } from "./storage";
@@ -46,6 +57,17 @@ export async function registerRoutes(
   app.post("/api/admin/forecasts", ...adminMiddleware, adminCreateForecast);
   app.post("/api/admin/signals", ...adminMiddleware, adminUpdateSignal);
   app.get("/api/admin/forecasts", ...adminMiddleware, adminGetForecasts);
+
+  app.get("/api/market/overview", requireAuth, getMarketOverview);
+  app.get("/api/market/nnpc", requireAuth, getNnpcPrice);
+  app.get("/api/market/fx", requireAuth, getFxRate);
+  app.get("/api/market/vessels", requireAuth, getVesselTracking);
+
+  app.post("/api/admin/sync/nnpc", ...adminMiddleware, triggerNnpcSync);
+  app.post("/api/admin/sync/nnpc-recalculate", ...adminMiddleware, triggerNnpcSyncAndRecalculate);
+  app.post("/api/admin/sync/vessels", ...adminMiddleware, triggerVesselSignalUpdate);
+  app.post("/api/admin/sync/fx", ...adminMiddleware, triggerFxSync);
+  app.post("/api/admin/sync/fx-signals", ...adminMiddleware, triggerFxSignalUpdate);
 
   return httpServer;
 }

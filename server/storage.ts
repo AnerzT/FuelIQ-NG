@@ -43,6 +43,7 @@ export interface IStorage {
   createRegulationUpdate(data: InsertRegulationUpdate): Promise<RegulationUpdate>;
 
   getExternalPriceFeeds(terminalId?: string, limit?: number): Promise<ExternalPriceFeed[]>;
+  getExternalPriceFeedBySource(sourceName: string, limit?: number): Promise<ExternalPriceFeed[]>;
   createExternalPriceFeed(data: InsertExternalPriceFeed): Promise<ExternalPriceFeed>;
 
   getFxRates(limit?: number): Promise<FxRate[]>;
@@ -188,6 +189,13 @@ export class DatabaseStorage implements IStorage {
       return query.where(eq(externalPriceFeeds.terminalId, terminalId)).orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
     }
     return query.orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
+  }
+
+  async getExternalPriceFeedBySource(sourceName: string, limit = 1): Promise<ExternalPriceFeed[]> {
+    return db.select().from(externalPriceFeeds)
+      .where(eq(externalPriceFeeds.sourceName, sourceName))
+      .orderBy(desc(externalPriceFeeds.createdAt))
+      .limit(limit);
   }
 
   async createExternalPriceFeed(data: InsertExternalPriceFeed): Promise<ExternalPriceFeed> {
