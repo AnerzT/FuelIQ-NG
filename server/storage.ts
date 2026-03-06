@@ -2,7 +2,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, desc } from "drizzle-orm";
 import {
   users, terminals, marketSignals, forecasts, priceHistory,
+  refineryUpdates, regulationUpdates, externalPriceFeeds, fxRates,
   type User, type InsertUser, type Terminal, type MarketSignal, type Forecast, type PriceHistoryEntry,
+  type RefineryUpdate, type RegulationUpdate, type ExternalPriceFeed, type FxRate,
+  type InsertRefineryUpdate, type InsertRegulationUpdate, type InsertExternalPriceFeed, type InsertFxRate,
 } from "@shared/schema";
 
 if (!process.env.DATABASE_URL) {
@@ -32,6 +35,19 @@ export interface IStorage {
   updateTerminal(id: string, data: Partial<Pick<Terminal, "active" | "name" | "state">>): Promise<Terminal | undefined>;
   getAllForecasts(limit?: number): Promise<(Forecast & { terminalName?: string })[]>;
   getForecasts(terminalId: string, limit?: number): Promise<(Forecast & { terminalName?: string })[]>;
+
+  getRefineryUpdates(limit?: number): Promise<RefineryUpdate[]>;
+  createRefineryUpdate(data: InsertRefineryUpdate): Promise<RefineryUpdate>;
+
+  getRegulationUpdates(limit?: number): Promise<RegulationUpdate[]>;
+  createRegulationUpdate(data: InsertRegulationUpdate): Promise<RegulationUpdate>;
+
+  getExternalPriceFeeds(terminalId?: string, limit?: number): Promise<ExternalPriceFeed[]>;
+  createExternalPriceFeed(data: InsertExternalPriceFeed): Promise<ExternalPriceFeed>;
+
+  getFxRates(limit?: number): Promise<FxRate[]>;
+  getLatestFxRate(): Promise<FxRate | undefined>;
+  createFxRate(data: InsertFxRate): Promise<FxRate>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -146,6 +162,51 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(forecasts.createdAt))
       .limit(limit);
     return rows;
+  }
+
+  async getRefineryUpdates(limit = 20): Promise<RefineryUpdate[]> {
+    return db.select().from(refineryUpdates).orderBy(desc(refineryUpdates.createdAt)).limit(limit);
+  }
+
+  async createRefineryUpdate(data: InsertRefineryUpdate): Promise<RefineryUpdate> {
+    const [created] = await db.insert(refineryUpdates).values(data).returning();
+    return created;
+  }
+
+  async getRegulationUpdates(limit = 20): Promise<RegulationUpdate[]> {
+    return db.select().from(regulationUpdates).orderBy(desc(regulationUpdates.createdAt)).limit(limit);
+  }
+
+  async createRegulationUpdate(data: InsertRegulationUpdate): Promise<RegulationUpdate> {
+    const [created] = await db.insert(regulationUpdates).values(data).returning();
+    return created;
+  }
+
+  async getExternalPriceFeeds(terminalId?: string, limit = 20): Promise<ExternalPriceFeed[]> {
+    const query = db.select().from(externalPriceFeeds);
+    if (terminalId) {
+      return query.where(eq(externalPriceFeeds.terminalId, terminalId)).orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
+    }
+    return query.orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
+  }
+
+  async createExternalPriceFeed(data: InsertExternalPriceFeed): Promise<ExternalPriceFeed> {
+    const [created] = await db.insert(externalPriceFeeds).values(data).returning();
+    return created;
+  }
+
+  async getFxRates(limit = 30): Promise<FxRate[]> {
+    return db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(limit);
+  }
+
+  async getLatestFxRate(): Promise<FxRate | undefined> {
+    const [rate] = await db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(1);
+    return rate;
+  }
+
+  async createFxRate(data: InsertFxRate): Promise<FxRate> {
+    const [created] = await db.insert(fxRates).values(data).returning();
+    return created;
   }
 }
 

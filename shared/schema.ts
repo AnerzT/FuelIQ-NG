@@ -49,6 +49,43 @@ export const priceHistory = pgTable("price_history", {
   price: real("price").notNull(),
 });
 
+export const refineryUpdates = pgTable("refinery_updates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  refineryName: text("refinery_name").notNull(),
+  productionCapacity: real("production_capacity").notNull(),
+  operationalStatus: text("operational_status").notNull(),
+  pmsOutputEstimate: real("pms_output_estimate").notNull(),
+  dieselOutputEstimate: real("diesel_output_estimate").notNull(),
+  jetOutputEstimate: real("jet_output_estimate").notNull(),
+  updateSource: text("update_source").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const regulationUpdates = pgTable("regulation_updates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  impactLevel: text("impact_level").notNull().default("low"),
+  effectiveDate: timestamp("effective_date").notNull(),
+  source: text("source").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const externalPriceFeeds = pgTable("external_price_feeds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceName: text("source_name").notNull(),
+  price: real("price").notNull(),
+  terminalId: varchar("terminal_id").references(() => terminals.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const fxRates = pgTable("fx_rates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  rate: real("rate").notNull(),
+  source: text("source").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   name: true,
   email: true,
@@ -70,10 +107,27 @@ export const insertTerminalSchema = createInsertSchema(terminals).omit({ id: tru
 export const insertMarketSignalSchema = createInsertSchema(marketSignals).omit({ id: true });
 export const insertForecastSchema = createInsertSchema(forecasts).omit({ id: true });
 export const insertPriceHistorySchema = createInsertSchema(priceHistory).omit({ id: true });
+export const insertRefineryUpdateSchema = createInsertSchema(refineryUpdates).omit({ id: true, createdAt: true });
+export const insertRegulationUpdateSchema = createInsertSchema(regulationUpdates).omit({ id: true, createdAt: true }).extend({
+  impactLevel: z.enum(["low", "medium", "high"]),
+});
+export const insertExternalPriceFeedSchema = createInsertSchema(externalPriceFeeds).omit({ id: true, createdAt: true }).extend({
+  sourceName: z.enum(["NNPC", "Dangote", "Depot"]),
+});
+export const insertFxRateSchema = createInsertSchema(fxRates).omit({ id: true, createdAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertRefineryUpdate = z.infer<typeof insertRefineryUpdateSchema>;
+export type InsertRegulationUpdate = z.infer<typeof insertRegulationUpdateSchema>;
+export type InsertExternalPriceFeed = z.infer<typeof insertExternalPriceFeedSchema>;
+export type InsertFxRate = z.infer<typeof insertFxRateSchema>;
+
 export type User = typeof users.$inferSelect;
 export type Terminal = typeof terminals.$inferSelect;
 export type MarketSignal = typeof marketSignals.$inferSelect;
 export type Forecast = typeof forecasts.$inferSelect;
 export type PriceHistoryEntry = typeof priceHistory.$inferSelect;
+export type RefineryUpdate = typeof refineryUpdates.$inferSelect;
+export type RegulationUpdate = typeof regulationUpdates.$inferSelect;
+export type ExternalPriceFeed = typeof externalPriceFeeds.$inferSelect;
+export type FxRate = typeof fxRates.$inferSelect;

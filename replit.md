@@ -28,6 +28,10 @@ Generated client at `generated/prisma/`. Config at `prisma.config.ts`.
 - **MarketSignal**: id, terminalId (FK), vesselActivity, truckQueue, nnpcSupply, fxPressure, policyRisk, createdAt
 - **Forecast**: id, terminalId (FK), expectedMin, expectedMax, bias (bullish|bearish|neutral), confidence, suggestedAction, createdAt
 - **PriceHistory**: id, terminalId (FK), date, price
+- **RefineryUpdate**: id, refineryName, productionCapacity, operationalStatus, pmsOutputEstimate, dieselOutputEstimate, jetOutputEstimate, updateSource, createdAt
+- **RegulationUpdate**: id, title, summary, impactLevel (low|medium|high), effectiveDate, source, createdAt
+- **ExternalPriceFeed**: id, sourceName (NNPC|Dangote|Depot), price, terminalId (FK, optional), createdAt
+- **FxRate**: id, rate, source, createdAt
 
 ## Seeded Terminals
 
