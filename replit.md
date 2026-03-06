@@ -33,9 +33,42 @@ Generated client at `generated/prisma/`. Config at `prisma.config.ts`.
 
 Apapa (Lagos), Calabar (Cross River), Port Harcourt (Rivers), Warri (Delta), Onne (Rivers), Bonny (Rivers), Atlas Cove (Lagos), Ijegun (Lagos)
 
+## Production Hardening
+
+- **Compression**: gzip via `compression` middleware (threshold 1KB, level 6)
+- **CORS**: Configurable origins via `CORS_ORIGINS` env var (comma-separated), credentials enabled
+- **Helmet**: Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
+- **Rate Limiting**: API routes 100 req/15min (prod), auth routes 20 req/15min (prod)
+- **Error Handling**: Centralized `apiErrorHandler` middleware; stack traces hidden in production
+- **Health Check**: `GET /api/health` returns status and timestamp
+- **Static Caching**: 1-year immutable cache for assets; no-cache for HTML/SW/manifest
+- **Build**: esbuild bundles server to `dist/index.cjs`; Vite builds client to `dist/public`
+- **Environment**: `JWT_SECRET` or `SESSION_SECRET` required (fails fast if missing); `DATABASE_URL` required
+
+### Required Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` or `SESSION_SECRET` | Secret for JWT token signing |
+| `PORT` | Server port (default: 5000) |
+| `NODE_ENV` | `development` or `production` |
+| `CORS_ORIGINS` | Comma-separated allowed origins (optional, defaults to allow all) |
+
+### Middleware Stack (`server/middleware/production.ts`)
+
+- `setupHelmet()` - Security headers
+- `setupCompression()` - Response compression
+- `setupCors()` - CORS configuration
+- `setupApiRateLimit()` - General API rate limiting
+- `setupAuthRateLimit()` - Auth endpoint rate limiting
+- `apiErrorHandler()` - Centralized error handler
+- `notFoundHandler()` - API 404 handler
+
 ## Backend Architecture (Controller/Middleware/Services Pattern)
 
 - `server/middleware/auth.ts` - JWT auth middleware (`requireAuth`), token helpers
+- `server/middleware/production.ts` - Production middleware (compression, CORS, rate limiting, security)
 - `server/controllers/auth.controller.ts` - Register, login, getMe handlers
 - `server/controllers/terminal.controller.ts` - GET terminals handler
 - `server/controllers/forecast.controller.ts` - GET/POST/generate forecast handlers
@@ -101,7 +134,7 @@ All responses follow: `{ success: boolean, message?: string, data?: any }`
 
 ## Installed Packages
 
-@prisma/client, prisma, jsonwebtoken, bcryptjs, recharts, axios, date-fns, next-pwa, clsx, lucide-react (plus existing deps)
+@prisma/client, prisma, jsonwebtoken, bcryptjs, recharts, axios, date-fns, next-pwa, clsx, lucide-react, compression, cors, express-rate-limit, helmet (plus existing deps)
 
 ## PWA Support
 

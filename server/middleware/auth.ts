@@ -1,7 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.SESSION_SECRET || "fueliq-ng-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET or SESSION_SECRET environment variable is required");
+}
 
 export interface AuthRequest extends Request {
   userId?: string;
