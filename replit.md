@@ -89,6 +89,17 @@ All responses follow: `{ success: boolean, message?: string, data?: any }`
 
 @prisma/client, prisma, jsonwebtoken, bcryptjs, recharts, axios, date-fns, next-pwa, clsx, lucide-react (plus existing deps)
 
+## PWA Support
+
+Full Progressive Web App implementation:
+- **Manifest**: `client/public/manifest.json` — app name "FuelIQ NG", theme `#0f172a`, standalone display
+- **Service Worker**: `client/public/sw.js` — network-first for navigation with offline fallback, runtime caching for static assets
+- **Offline Page**: `client/public/offline.html` — branded dark-themed offline fallback
+- **Icons**: 72, 96, 128, 144, 152, 192, 384, 512px + maskable 512px + apple-touch-icon (180px)
+- **iOS Meta Tags**: apple-mobile-web-app-capable, apple-mobile-web-app-status-bar-style (black-translucent), apple-touch-icon
+- **Android**: Full manifest with maskable icon, theme-color meta tag
+- Registered inline in `client/index.html` on page load
+
 ## Theme
 
 Dark professional fintech theme with green accent (HSL 152 60% 40%). PWA enabled.
