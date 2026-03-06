@@ -35,7 +35,7 @@ The FuelIQ NG platform is built with a modern, full-stack architecture.
 
 **Core Features & Functionality:**
 -   **User Management:** Includes user registration, login, profile management, and role-based access control (admin/marketer).
--   **Subscription Tiers:** Implements a tiered subscription model (Free, Pro, Enterprise) with enforced limits on terminals, products, forecasts, data delay, depot spread, inventory, hedge lab, trader signals, and notification services via backend middleware.
+-   **Subscription Tiers:** Implements a tiered subscription model (Free, Pro ₦15,000/mo, Elite ₦90,000/mo) with enforced limits on terminals, products, forecasts, data delay, depot spread, inventory, hedge lab, trader signals, and notification services via backend middleware. Pro includes all products, depot comparison, inventory, basic hedge, 10 SMS/week. Elite adds AI chat intelligence, unlimited terminals, advanced hedge lab, API access, WhatsApp alerts, priority signals, exportable analytics.
 -   **Multi-Product Support:** Supports 5 petroleum product types: PMS, AGO, JET_A1, ATK, LPG — each with product-specific forecast drivers, base prices, and weight profiles.
 -   **Market Signals:** Captures and processes various market signals (vessel activity, truck queue, NNPC supply, FX pressure, policy risk) per product type.
 -   **Forecast Engine:**

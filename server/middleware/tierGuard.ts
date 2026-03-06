@@ -3,7 +3,7 @@ import type { AuthRequest } from "./auth";
 import { TIER_LIMITS, type SubscriptionTier } from "@shared/schema";
 import { storage } from "../storage";
 
-const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, enterprise: 2 };
+const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, elite: 2 };
 
 function getTier(req: AuthRequest): SubscriptionTier {
   return req.subscriptionTier || "free";
@@ -118,8 +118,8 @@ export function requireSmsQuota() {
     if (user.smsAlertsUsedThisWeek >= limits.smsAlertsPerWeek) {
       return res.status(429).json({
         success: false,
-        message: `Pro tier is limited to ${limits.smsAlertsPerWeek} SMS alerts per week. Upgrade to Enterprise for unlimited.`,
-        requiredTier: "enterprise",
+        message: `Pro tier is limited to ${limits.smsAlertsPerWeek} SMS alerts per week. Upgrade to Elite for unlimited.`,
+        requiredTier: "elite",
         currentTier: tier,
       });
     }

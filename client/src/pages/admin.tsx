@@ -704,7 +704,7 @@ function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; f
     const styles: Record<string, string> = {
       free: "bg-slate-500/10 text-slate-400 border-slate-500/20",
       pro: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-      enterprise: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+      elite: "bg-purple-500/10 text-purple-400 border-purple-500/20",
     };
     return styles[tier] || styles.free;
   };
@@ -723,7 +723,7 @@ function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; f
     total: subs?.length || 0,
     free: subs?.filter((s) => s.tier === "free").length || 0,
     pro: subs?.filter((s) => s.tier === "pro").length || 0,
-    enterprise: subs?.filter((s) => s.tier === "enterprise").length || 0,
+    elite: subs?.filter((s) => s.tier === "elite").length || 0,
   };
 
   return (
@@ -733,7 +733,7 @@ function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; f
           { label: "Total Users", value: stats.total, color: "text-white" },
           { label: "Free", value: stats.free, color: "text-slate-400" },
           { label: "Pro", value: stats.pro, color: "text-blue-400" },
-          { label: "Enterprise", value: stats.enterprise, color: "text-purple-400" },
+          { label: "Elite", value: stats.elite, color: "text-purple-400" },
         ].map((stat) => (
           <div key={stat.label} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
             <p className="text-xs text-slate-500">{stat.label}</p>
@@ -781,7 +781,7 @@ function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; f
               <SelectContent className="bg-[#0c1220] border-white/[0.08]">
                 <SelectItem value="free" className="text-slate-300 focus:bg-white/[0.06] focus:text-white">Free</SelectItem>
                 <SelectItem value="pro" className="text-blue-400 focus:bg-white/[0.06]">Pro</SelectItem>
-                <SelectItem value="enterprise" className="text-purple-400 focus:bg-white/[0.06]">Enterprise</SelectItem>
+                <SelectItem value="elite" className="text-purple-400 focus:bg-white/[0.06]">Elite</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -161,6 +161,16 @@ async function seedDepotsAndPrices() {
 
 export { seedDepotsAndPrices };
 
+export async function migrateLegacyTiers() {
+  const legacyUsers = await db.select().from(users).where(eq(users.subscriptionTier, "enterprise" as any));
+  if (legacyUsers.length > 0) {
+    for (const u of legacyUsers) {
+      await db.update(users).set({ subscriptionTier: "elite" }).where(eq(users.id, u.id));
+    }
+    console.log(`Migrated ${legacyUsers.length} users from 'enterprise' to 'elite' tier.`);
+  }
+}
+
 export async function seedAdminUser() {
   const existingAdmin = await db.select().from(users).where(eq(users.email, "admin@fueliq.ng"));
   if (existingAdmin.length === 0) {

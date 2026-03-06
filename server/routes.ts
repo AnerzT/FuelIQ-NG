@@ -63,7 +63,7 @@ import {
   generateHedgeRecommendations,
 } from "./controllers/hedge.controller";
 import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard";
-import { seedDatabase, seedAdminUser, seedDepotsAndPrices } from "./seed";
+import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers } from "./seed";
 import { seedPrismaDatabase } from "./prisma-seed";
 import { storage } from "./storage";
 
@@ -75,6 +75,7 @@ export async function registerRoutes(
   await seedAdminUser();
   await seedPrismaDatabase();
   await seedDepotsAndPrices();
+  await migrateLegacyTiers();
 
   const withTier = [requireAuth, attachUserRole(storage)];
 
@@ -141,8 +142,8 @@ export async function registerRoutes(
   app.post("/api/inventory/transactions", ...withTier, requireTier("pro"), createTransaction);
   app.get("/api/inventory/:inventoryId/transactions", ...withTier, requireTier("pro"), getTransactions);
 
-  app.get("/api/trader-signals", ...withTier, requireTier("pro"), getTraderSignals);
-  app.post("/api/trader-signals", ...withTier, requireTier("pro"), submitTraderSignal);
+  app.get("/api/trader-signals", ...withTier, requireTier("elite"), getTraderSignals);
+  app.post("/api/trader-signals", ...withTier, requireTier("elite"), submitTraderSignal);
 
   app.get("/api/hedge", ...withTier, requireTier("pro"), getHedgeRecommendations);
   app.post("/api/hedge/generate", ...withTier, requireTier("pro"), generateHedgeRecommendations);

@@ -1,0 +1,121 @@
+1️⃣ FINAL PRODUCTION FOLDER STRUCTURE (Enterprise Grade)
+
+We restructure FuelIQ NG into scalable micro-service-ready architecture.
+
+fueliq-ng/
+│
+├── apps/
+│   ├── web/                  → Next.js Frontend (PWA)
+│   ├── api/                  → Express backend
+│
+├── packages/
+│   ├── ui/                   → Shared UI components
+│   ├── types/                → Shared TypeScript types
+│   ├── config/               → Shared configs
+│
+├── services/
+│   ├── forecast-engine/
+│   ├── ai-model/
+│   ├── vessel-tracking/
+│   ├── fx-service/
+│   ├── refinery-intel/
+│   ├── regulation-intel/
+│   ├── depot-spread/
+│   ├── inventory/
+│   ├── hedge-lab/
+│   ├── trader-intel/
+│   ├── notification-service/
+│
+├── workers/
+│   ├── forecast-cron.ts
+│   ├── refinery-update-cron.ts
+│   ├── fx-update-cron.ts
+│
+├── prisma/
+│   └── schema.prisma
+│
+├── infrastructure/
+│   ├── docker/
+│   ├── nginx/
+│   ├── terraform/
+│
+└── docs/
+
+This makes you ready for:
+
+10,000+ users
+
+Multi-region scaling
+
+Future mobile app
+
+2️⃣ FULL AI FORECAST MATHEMATICAL MODEL
+
+We move from rule-based to weighted probability model.
+
+📊 Feature Vector
+
+For each product:
+
+X = [
+  FX_volatility,
+  vessel_count,
+  refinery_output_index,
+  depot_spread,
+  regulation_impact,
+  demand_index,
+  historical_volatility,
+  trader_sentiment_score
+]
+🎯 Logistic Probability Model
+P(increase) = 1 / (1 + e^-(W·X + b))
+
+Where:
+
+W = weight vector
+
+b = bias
+
+X = feature input
+
+Confidence Score
+confidence = max(P(increase), P(drop), P(stable))
+Expected Range Calculation
+volatility = historical_std_dev(product)
+
+expected_min = current_price - (volatility * risk_factor)
+expected_max = current_price + (volatility * risk_factor)
+Risk Factor Formula
+risk_factor =
+  1
+  + (FX_volatility * 0.2)
+  + (regulation_impact * 0.3)
+  + (refinery_disruption * 0.4)
+
+This becomes your proprietary engine.
+
+3️⃣ HEDGE LAB — ADVANCED MODEL
+
+We create 3 hedge engines:
+
+1️⃣ Inventory Risk Engine
+risk_exposure =
+   (inventory_volume * forecast_drop_probability)
+   * (avg_cost - expected_price)
+2️⃣ Staggered Buy Optimizer
+optimal_buy_split =
+   volatility_index / liquidity_score
+
+Generates:
+
+40% buy today
+
+30% next window
+
+30% later
+
+3️⃣ Arbitrage Engine (Depot Spread)
+spread = highest_depot_price - lowest_depot_price
+
+if spread > transport_cost:
+   arbitrage_opportunity = TRUE

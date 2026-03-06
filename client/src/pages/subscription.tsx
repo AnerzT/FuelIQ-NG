@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { TIER_LIMITS, type SubscriptionTier } from "@shared/schema";
 
-const tierOrder: SubscriptionTier[] = ["free", "pro", "enterprise"];
+const tierOrder: SubscriptionTier[] = ["free", "pro", "elite"];
 
 const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: string; glow: string }> = {
   free: {
@@ -29,11 +29,11 @@ const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: 
     bg: "bg-blue-500/[0.04]",
     glow: "shadow-lg shadow-blue-500/[0.08]",
   },
-  enterprise: {
+  elite: {
     badge: "text-purple-400 bg-purple-500/10 border-purple-500/20",
-    border: "border-purple-500/20",
+    border: "border-purple-500/20 shadow-lg shadow-purple-500/[0.05]",
     bg: "bg-purple-500/[0.04]",
-    glow: "",
+    glow: "shadow-lg shadow-purple-500/[0.08]",
   },
 };
 
@@ -60,10 +60,10 @@ const featureLabels: { key: string; label: string }[] = [
 
 function formatFeatureValue(key: string, value: any): { text: string; available: boolean } {
   if (typeof value === "boolean") return { text: value ? "Yes" : "No", available: value };
-  if (key === "maxTerminals") return value === Infinity ? { text: "Unlimited", available: true } : { text: `${value} terminal`, available: true };
+  if (key === "maxTerminals") return value === Infinity ? { text: "Unlimited", available: true } : { text: `${value} terminal${value > 1 ? "s" : ""}`, available: true };
   if (key === "maxProducts") return value === Infinity ? { text: "All (PMS, AGO, JET, ATK, LPG)", available: true } : { text: `${value} product (PMS only)`, available: true };
   if (key === "forecastsPerDay") return value === Infinity ? { text: "Unlimited", available: true } : { text: `${value} per day`, available: true };
-  if (key === "dataDelay") return value === 0 ? { text: "Real-time", available: true } : { text: `${value}h delayed`, available: false };
+  if (key === "dataDelay") return value === 0 ? { text: "Real-time", available: true } : value <= 6 ? { text: `${value}h delay`, available: true } : { text: `${value}h delayed`, available: false };
   if (key === "smsAlertsPerWeek") {
     if (value === 0) return { text: "None", available: false };
     if (value === Infinity) return { text: "Unlimited", available: true };

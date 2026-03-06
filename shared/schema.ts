@@ -12,7 +12,7 @@ export interface NotificationPrefs {
   morningDigest: boolean;
 }
 
-export type SubscriptionTier = "free" | "pro" | "enterprise";
+export type SubscriptionTier = "free" | "pro" | "elite";
 
 export const PRODUCT_TYPES = ["PMS", "AGO", "JET_A1", "ATK", "LPG"] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
@@ -47,13 +47,13 @@ export const TIER_LIMITS = {
     price: 15000,
     priceLabel: "₦15,000",
     period: "/month",
-    maxTerminals: Infinity,
+    maxTerminals: 3,
     maxProducts: Infinity,
-    forecastsPerDay: Infinity,
-    dataDelay: 0,
+    forecastsPerDay: 10,
+    dataDelay: 6,
     aiProbability: true,
-    smsAlertsPerWeek: 5,
-    whatsappDigest: true,
+    smsAlertsPerWeek: 10,
+    whatsappDigest: false,
     refineryUpdates: true,
     regulationAlerts: true,
     apiAccess: false,
@@ -64,10 +64,10 @@ export const TIER_LIMITS = {
     inventoryAccess: true,
     hedgeLab: true,
     depotSpread: true,
-    traderSignals: true,
+    traderSignals: false,
   },
-  enterprise: {
-    label: "Enterprise",
+  elite: {
+    label: "Elite",
     price: 90000,
     priceLabel: "₦90,000",
     period: "/month",
@@ -324,7 +324,7 @@ export const insertTraderSignalSchema = createInsertSchema(traderSignals).omit({
 export const insertHedgeRecommendationSchema = createInsertSchema(hedgeRecommendations).omit({ id: true, createdAt: true });
 
 export const updateSubscriptionSchema = z.object({
-  tier: z.enum(["free", "pro", "enterprise"]),
+  tier: z.enum(["free", "pro", "elite"]),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   assignedTerminalId: z.string().optional(),

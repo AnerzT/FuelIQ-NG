@@ -414,12 +414,12 @@ export default function Landing() {
               },
               {
                 name: "Pro", price: "₦15,000", period: "/month", desc: "Best for medium marketers",
-                features: ["All terminals", "Real-time forecasts", "AI probability engine", "Refinery updates", "Regulation alerts", "5 SMS alerts per week", "WhatsApp daily summary"],
+                features: ["All products", "Depot comparison", "Inventory tracking", "Basic hedge suggestions", "10 SMS alerts per week", "Refinery updates", "Regulation alerts"],
                 cta: "Start Free Trial", highlighted: true, color: "blue",
               },
               {
-                name: "Enterprise", price: "₦90,000", period: "/month", desc: "Best for depot owners & large traders",
-                features: ["Unlimited terminals", "Early signal detection", "API access", "Forecast export (Excel)", "Unlimited SMS alerts", "WhatsApp alerts", "Custom forecast sensitivity", "Dedicated support"],
+                name: "Elite", price: "₦90,000", period: "/month", desc: "Best for depot owners & large traders",
+                features: ["AI chat intelligence", "Unlimited terminals", "Advanced hedge lab", "API access", "WhatsApp alerts", "Priority signals", "Exportable analytics", "Dedicated support"],
                 cta: "Contact Sales", highlighted: false, color: "purple",
               },
             ].map((plan, i) => (

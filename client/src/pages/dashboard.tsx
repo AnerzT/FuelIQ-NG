@@ -333,12 +333,12 @@ export default function Dashboard() {
                 const tierStyles: Record<SubscriptionTier, string> = {
                   free: "text-slate-400 bg-slate-500/10 border-slate-500/20",
                   pro: "text-blue-400 bg-blue-500/10 border-blue-500/20",
-                  enterprise: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+                  elite: "text-purple-400 bg-purple-500/10 border-purple-500/20",
                 };
                 const tierIcons: Record<SubscriptionTier, typeof Crown> = {
                   free: Zap,
                   pro: Crown,
-                  enterprise: Crown,
+                  elite: Crown,
                 };
                 const TierIcon = tierIcons[userTier];
                 return (
@@ -485,7 +485,7 @@ export default function Dashboard() {
             {tierConfig.traderSignals ? (
               <TraderSignalsTab token={token} fetchFn={fetchFn} data={traderSignalsData} refetch={refetchTraderSignals} />
             ) : (
-              <LockedFeature feature="Trader Signals" tier="pro" />
+              <LockedFeature feature="Trader Signals" tier="elite" />
             )}
           </TabsContent>
 
