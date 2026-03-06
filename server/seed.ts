@@ -1,5 +1,5 @@
 import { db } from "./storage";
-import { users, terminals, marketSignals, forecasts, priceHistory, depots, depotPrices } from "@shared/schema";
+import { users, terminals, marketSignals, forecasts, priceHistory, depots, depotPrices, refineryUpdates, regulationUpdates } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -169,6 +169,39 @@ export async function migrateLegacyTiers() {
     }
     console.log(`Migrated ${legacyUsers.length} users from 'enterprise' to 'elite' tier.`);
   }
+}
+
+export async function seedRefineryAndRegulationData() {
+  const existingRefinery = await db.select().from(refineryUpdates);
+  if (existingRefinery.length > 0) {
+    console.log("Refinery & regulation data already seeded, skipping.");
+    return;
+  }
+
+  const refineryData = [
+    { refineryName: "Dangote Refinery", productionCapacity: 85, operationalStatus: "operational", pmsOutputEstimate: 320, dieselOutputEstimate: 180, jetOutputEstimate: 45, updateSource: "NNPC" },
+    { refineryName: "Port Harcourt Refinery", productionCapacity: 40, operationalStatus: "maintenance", pmsOutputEstimate: 60, dieselOutputEstimate: 35, jetOutputEstimate: 10, updateSource: "NNPC" },
+    { refineryName: "Warri Refinery", productionCapacity: 55, operationalStatus: "operational", pmsOutputEstimate: 80, dieselOutputEstimate: 45, jetOutputEstimate: 15, updateSource: "NNPC" },
+    { refineryName: "Kaduna Refinery", productionCapacity: 0, operationalStatus: "shutdown", pmsOutputEstimate: 0, dieselOutputEstimate: 0, jetOutputEstimate: 0, updateSource: "NNPC" },
+  ];
+
+  for (const r of refineryData) {
+    await db.insert(refineryUpdates).values(r);
+  }
+
+  const regulationData = [
+    { title: "PPPRA Price Cap Adjustment", summary: "The PPPRA has announced a revised price band for PMS, increasing the cap to ₦650/L effective March 15. This reflects rising crude oil costs and FX pressures.", impactLevel: "high", effectiveDate: new Date("2026-03-15"), source: "PPPRA Gazette" },
+    { title: "New Depot Licensing Requirements", summary: "NMDPRA introduces stricter licensing requirements for independent depot operators, including environmental compliance and storage capacity thresholds.", impactLevel: "medium", effectiveDate: new Date("2026-04-01"), source: "NMDPRA" },
+    { title: "VAT Exemption on JET A1 Extended", summary: "Federal government extends VAT exemption on aviation fuel (JET A1) through Q2 2026 to support the aviation sector recovery.", impactLevel: "low", effectiveDate: new Date("2026-01-01"), source: "FIRS" },
+    { title: "FX Window for Petroleum Imports", summary: "CBN establishes a dedicated FX window for petroleum product imports to stabilize pump prices. Eligible importers can access USD at official rates.", impactLevel: "high", effectiveDate: new Date("2026-03-10"), source: "CBN Circular" },
+    { title: "LPG Price Deregulation Phase 2", summary: "Second phase of LPG market deregulation allows independent marketers to set prices based on market forces. Expected to increase competition.", impactLevel: "medium", effectiveDate: new Date("2026-03-20"), source: "NMDPRA" },
+  ];
+
+  for (const r of regulationData) {
+    await db.insert(regulationUpdates).values(r);
+  }
+
+  console.log("Refinery updates and regulation data seeded successfully.");
 }
 
 export async function seedAdminUser() {

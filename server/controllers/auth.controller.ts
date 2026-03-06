@@ -90,6 +90,28 @@ export async function login(req: Request, res: Response) {
   }
 }
 
+export async function refreshToken(req: AuthRequest, res: Response) {
+  try {
+    const user = await storage.getUser(req.userId!);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const token = generateToken(user.id);
+
+    return res.json({
+      success: true,
+      message: "Token refreshed successfully",
+      data: {
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
+        token,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 export async function getMe(req: AuthRequest, res: Response) {
   try {
     const user = await storage.getUser(req.userId!);

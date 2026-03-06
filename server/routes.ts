@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { type Server } from "http";
 import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth";
-import { register, login, getMe } from "./controllers/auth.controller";
+import { register, login, getMe, refreshToken } from "./controllers/auth.controller";
 import { getTerminals } from "./controllers/terminal.controller";
-import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast } from "./controllers/forecast.controller";
+import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast, getForecastHistory } from "./controllers/forecast.controller";
 import { getSignals, createSignal } from "./controllers/signal.controller";
 import { getPriceHistory } from "./controllers/price-history.controller";
 import {
@@ -23,6 +23,7 @@ import {
   triggerFxSync,
   triggerFxSignalUpdate,
   getMarketOverview,
+  getFxHistory,
 } from "./controllers/integrations.controller";
 import {
   getNotificationPrefs,
@@ -63,8 +64,10 @@ import {
   generateHedgeRecommendations,
   getAdvancedAnalysis,
 } from "./controllers/hedge.controller";
+import { getRefineryUpdates, getRefineryStatus } from "./controllers/refinery.controller";
+import { getRegulations, getHighImpactRegulations } from "./controllers/regulation.controller";
 import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard";
-import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers } from "./seed";
+import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers, seedRefineryAndRegulationData } from "./seed";
 import { seedPrismaDatabase } from "./prisma-seed";
 import { storage } from "./storage";
 
@@ -76,6 +79,7 @@ export async function registerRoutes(
   await seedAdminUser();
   await seedPrismaDatabase();
   await seedDepotsAndPrices();
+  await seedRefineryAndRegulationData();
   await migrateLegacyTiers();
 
   const withTier = [requireAuth, attachUserRole(storage)];
@@ -83,6 +87,7 @@ export async function registerRoutes(
   app.post("/api/auth/register", register);
   app.post("/api/auth/login", login);
   app.get("/api/auth/me", requireAuth, getMe);
+  app.post("/api/auth/refresh", requireAuth, refreshToken);
 
   app.get("/api/terminals", requireAuth, getTerminals);
 
@@ -91,6 +96,7 @@ export async function registerRoutes(
   app.post("/api/forecast", ...withTier, requireForecastQuota(), createForecast);
   app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast);
   app.post("/api/forecast/score/:terminalId", ...withTier, requireTier("pro"), requireTerminalAccess(), requireForecastQuota(), scoreForecast);
+  app.get("/api/forecasts/history", ...withTier, getForecastHistory);
 
   app.get("/api/signals/:terminalId", ...withTier, requireTerminalAccess(), getSignals);
   app.post("/api/signals", requireAuth, createSignal);
@@ -104,6 +110,7 @@ export async function registerRoutes(
   app.post("/api/admin/signals", ...adminMiddleware, adminUpdateSignal);
   app.get("/api/admin/forecasts", ...adminMiddleware, adminGetForecasts);
 
+  app.get("/api/fx/history", ...withTier, withDataDelay(), getFxHistory);
   app.get("/api/market/overview", ...withTier, withDataDelay(), getMarketOverview);
   app.get("/api/market/nnpc", ...withTier, withDataDelay(), getNnpcPrice);
   app.get("/api/market/fx", ...withTier, withDataDelay(), getFxRate);
@@ -149,6 +156,11 @@ export async function registerRoutes(
   app.get("/api/hedge", ...withTier, requireTier("pro"), getHedgeRecommendations);
   app.post("/api/hedge/generate", ...withTier, requireTier("pro"), generateHedgeRecommendations);
   app.get("/api/hedge/analysis", ...withTier, requireTier("pro"), getAdvancedAnalysis);
+
+  app.get("/api/refinery/updates", ...withTier, requireTier("pro"), getRefineryUpdates);
+  app.get("/api/refinery/status", ...withTier, requireTier("pro"), getRefineryStatus);
+  app.get("/api/regulations", ...withTier, requireTier("pro"), getRegulations);
+  app.get("/api/regulations/high-impact", ...withTier, requireTier("pro"), getHighImpactRegulations);
 
   return httpServer;
 }

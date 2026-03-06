@@ -113,6 +113,34 @@ export async function triggerFxSignalUpdate(_req: AuthRequest, res: Response) {
   }
 }
 
+export async function getFxHistory(req: AuthRequest, res: Response) {
+  try {
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 90;
+    const page = typeof req.query.page === "string" ? parseInt(req.query.page, 10) : 1;
+    const safeLimit = Math.min(Math.max(limit, 1), 365);
+    const safePage = Math.max(page, 1);
+
+    const allRates = await storage.getFxRates(safeLimit * safePage);
+    const startIdx = (safePage - 1) * safeLimit;
+    const paginatedRates = allRates.slice(startIdx, startIdx + safeLimit);
+
+    return res.json({
+      success: true,
+      data: {
+        rates: paginatedRates,
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total: allRates.length,
+          hasMore: startIdx + safeLimit < allRates.length,
+        },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 export async function getMarketOverview(_req: AuthRequest, res: Response) {
   try {
     const [nnpcFeeds, fxRate, fxVolatility, vesselData] = await Promise.all([

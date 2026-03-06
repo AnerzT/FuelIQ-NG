@@ -127,6 +127,46 @@ export async function generateForecast(req: AuthRequest, res: Response) {
   }
 }
 
+export async function getForecastHistory(req: AuthRequest, res: Response) {
+  try {
+    const terminalId = typeof req.query.terminalId === "string" ? req.query.terminalId : undefined;
+    const productType = typeof req.query.productType === "string" ? req.query.productType : undefined;
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const page = typeof req.query.page === "string" ? parseInt(req.query.page, 10) : 1;
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
+    const safePage = Math.max(page, 1);
+
+    let allForecasts;
+    if (terminalId) {
+      allForecasts = await storage.getForecasts(terminalId, safeLimit * safePage);
+    } else {
+      allForecasts = await storage.getAllForecasts(safeLimit * safePage);
+    }
+
+    if (productType) {
+      allForecasts = allForecasts.filter((f) => f.productType === productType);
+    }
+
+    const startIdx = (safePage - 1) * safeLimit;
+    const paginatedForecasts = allForecasts.slice(startIdx, startIdx + safeLimit);
+
+    return res.json({
+      success: true,
+      data: {
+        forecasts: paginatedForecasts,
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total: allForecasts.length,
+          hasMore: startIdx + safeLimit < allForecasts.length,
+        },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 export async function scoreForecast(req: AuthRequest, res: Response) {
   try {
     const { terminalId } = req.params;

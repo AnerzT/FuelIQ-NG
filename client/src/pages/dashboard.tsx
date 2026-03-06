@@ -41,6 +41,11 @@ import {
   AlertCircle,
   ArrowUp,
   ArrowDown,
+  ScrollText,
+  Settings,
+  User,
+  Phone,
+  Mail,
 } from "lucide-react";
 import {
   AreaChart,
@@ -247,7 +252,7 @@ export default function Dashboard() {
   const { data: traderSignalsData, refetch: refetchTraderSignals } = useQuery<any>({
     queryKey: ["/api/trader-signals"],
     queryFn: fetchFn,
-    enabled: !!token && activeTab === "trader-signals",
+    enabled: !!token && (activeTab === "trader-signals" || activeTab === "overview"),
   });
 
   const { data: hedgeData } = useQuery<any>({
@@ -256,10 +261,28 @@ export default function Dashboard() {
     enabled: !!token && activeTab === "hedge-lab",
   });
 
-  const { data: refineryData } = useQuery<any>({
-    queryKey: ["/api/market/overview"],
+  const { data: refineryUpdatesData } = useQuery<any>({
+    queryKey: ["/api/refinery/updates"],
     queryFn: fetchFn,
-    enabled: !!token && activeTab === "refinery-intel",
+    enabled: !!token && (activeTab === "refinery-intel" || activeTab === "overview"),
+  });
+
+  const { data: regulationData } = useQuery<any>({
+    queryKey: ["/api/regulations"],
+    queryFn: fetchFn,
+    enabled: !!token && (activeTab === "regulation-updates" || activeTab === "overview"),
+  });
+
+  const { data: refineryStatusData } = useQuery<any>({
+    queryKey: ["/api/refinery/status"],
+    queryFn: fetchFn,
+    enabled: !!token && activeTab === "overview",
+  });
+
+  const { data: notifPrefsData, refetch: refetchNotifPrefs } = useQuery<any>({
+    queryKey: ["/api/notifications/preferences"],
+    queryFn: fetchFn,
+    enabled: !!token && activeTab === "settings",
   });
 
   const refreshAll = () => {
@@ -438,6 +461,12 @@ export default function Dashboard() {
             <TabsTrigger value="refinery-intel" className="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-slate-400 text-xs" data-testid="tab-refinery-intel">
               <Factory className="w-3.5 h-3.5 mr-1.5" />Refinery Intel
             </TabsTrigger>
+            <TabsTrigger value="regulation-updates" className="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-slate-400 text-xs" data-testid="tab-regulation-updates">
+              <ScrollText className="w-3.5 h-3.5 mr-1.5" />Regulations
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-slate-400 text-xs" data-testid="tab-settings">
+              <Settings className="w-3.5 h-3.5 mr-1.5" />Settings
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -450,6 +479,12 @@ export default function Dashboard() {
               historyLoading={historyLoading}
               chartData={chartData}
               selectedTerminal={selectedTerminal}
+              refineryStatusData={refineryStatusData}
+              regulationData={regulationData}
+              refineryUpdatesData={refineryUpdatesData}
+              traderSignalsData={traderSignalsData}
+              token={token}
+              fetchFn={fetchFn}
             />
           </TabsContent>
 
@@ -491,10 +526,22 @@ export default function Dashboard() {
 
           <TabsContent value="refinery-intel">
             {tierConfig.refineryUpdates ? (
-              <RefineryIntelTab token={token} fetchFn={fetchFn} data={refineryData} />
+              <RefineryIntelTab token={token} fetchFn={fetchFn} data={refineryUpdatesData} />
             ) : (
               <LockedFeature feature="Refinery Intel" tier="pro" />
             )}
+          </TabsContent>
+
+          <TabsContent value="regulation-updates">
+            {tierConfig.regulationAlerts ? (
+              <RegulationUpdatesTab token={token} fetchFn={fetchFn} data={regulationData} />
+            ) : (
+              <LockedFeature feature="Regulation Updates" tier="pro" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <SettingsTab user={user} token={token} fetchFn={fetchFn} notifPrefs={notifPrefsData} refetchNotifPrefs={refetchNotifPrefs} />
           </TabsContent>
         </Tabs>
       </main>
@@ -521,7 +568,7 @@ function LockedFeature({ feature, tier }: { feature: string; tier: string }) {
   );
 }
 
-function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, historyLoading, chartData, selectedTerminal }: any) {
+function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, historyLoading, chartData, selectedTerminal, refineryStatusData, regulationData, refineryUpdatesData, traderSignalsData, token, fetchFn }: any) {
   if (isDataLoading) {
     return (
       <div className="space-y-5">
@@ -684,6 +731,99 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
           )}
         </div>
       )}
+
+      <div className="grid lg:grid-cols-3 gap-5">
+        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-refinery-status">
+          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <Factory className="w-3.5 h-3.5" /> Refinery Status
+          </h3>
+          {(() => {
+            const statuses = Array.isArray(refineryStatusData) ? refineryStatusData : (refineryStatusData?.data || []);
+            if (statuses.length > 0) {
+              return statuses.slice(0, 4).map((r: any, i: number) => (
+                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid={`status-refinery-${i}`}>
+                  <span className="text-sm text-slate-300 truncate mr-2">{r.refineryName}</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+                    r.operationalStatus === "operational" ? "text-emerald-400 bg-emerald-500/10" :
+                    r.operationalStatus === "maintenance" ? "text-amber-400 bg-amber-500/10" :
+                    "text-red-400 bg-red-500/10"
+                  }`}>{r.operationalStatus}</span>
+                </div>
+              ));
+            }
+            return <div className="text-sm text-slate-600 py-4 text-center">No refinery data</div>;
+          })()}
+        </div>
+
+        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-regulation-impact">
+          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <ScrollText className="w-3.5 h-3.5" /> Latest Regulation Impact
+          </h3>
+          {(() => {
+            const regs = Array.isArray(regulationData) ? regulationData : (regulationData?.data || []);
+            const highImpact = regs.filter((r: any) => r.impactLevel === "high");
+            const toShow = highImpact.length > 0 ? highImpact.slice(0, 3) : regs.slice(0, 3);
+            if (toShow.length > 0) {
+              return toShow.map((reg: any, i: number) => (
+                <div key={i} className="py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04] space-y-1" data-testid={`overview-reg-${i}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white truncate mr-2">{reg.title}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                      reg.impactLevel === "high" ? "text-red-400 bg-red-500/10" :
+                      reg.impactLevel === "medium" ? "text-amber-400 bg-amber-500/10" :
+                      "text-emerald-400 bg-emerald-500/10"
+                    }`}>{reg.impactLevel}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 line-clamp-2">{reg.summary}</p>
+                </div>
+              ));
+            }
+            return <div className="text-sm text-slate-600 py-4 text-center">No regulation alerts</div>;
+          })()}
+        </div>
+
+        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-trader-sentiment">
+          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <MessageSquare className="w-3.5 h-3.5" /> Trader Sentiment
+          </h3>
+          {(() => {
+            const signals = Array.isArray(traderSignalsData) ? traderSignalsData : (traderSignalsData?.signals || []);
+            if (signals.length > 0) {
+              const bullish = signals.filter((s: any) => (s.sentimentScore ?? 0) > 0.3).length;
+              const bearish = signals.filter((s: any) => (s.sentimentScore ?? 0) < -0.3).length;
+              const neutral = signals.length - bullish - bearish;
+              const total = signals.length;
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-3 rounded-full bg-white/[0.04] overflow-hidden flex">
+                      {bullish > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(bullish / total) * 100}%` }} />}
+                      {neutral > 0 && <div className="h-full bg-amber-500" style={{ width: `${(neutral / total) * 100}%` }} />}
+                      {bearish > 0 && <div className="h-full bg-red-500" style={{ width: `${(bearish / total) * 100}%` }} />}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="py-2 px-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20" data-testid="sentiment-bullish">
+                      <div className="text-lg font-bold text-emerald-400">{bullish}</div>
+                      <div className="text-[10px] text-emerald-400/70 uppercase">Bullish</div>
+                    </div>
+                    <div className="py-2 px-2 rounded-lg bg-amber-500/10 border border-amber-500/20" data-testid="sentiment-neutral">
+                      <div className="text-lg font-bold text-amber-400">{neutral}</div>
+                      <div className="text-[10px] text-amber-400/70 uppercase">Neutral</div>
+                    </div>
+                    <div className="py-2 px-2 rounded-lg bg-red-500/10 border border-red-500/20" data-testid="sentiment-bearish">
+                      <div className="text-lg font-bold text-red-400">{bearish}</div>
+                      <div className="text-[10px] text-red-400/70 uppercase">Bearish</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-600 text-center">{total} signal{total !== 1 ? "s" : ""} analyzed</div>
+                </div>
+              );
+            }
+            return <div className="text-sm text-slate-600 py-4 text-center">No trader signals yet</div>;
+          })()}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1287,67 +1427,271 @@ function TraderSignalsTab({ token, fetchFn, data, refetch }: { token: string | n
 }
 
 function RefineryIntelTab({ token, fetchFn, data }: { token: string | null; fetchFn: any; data: any }) {
-  const overview = data || {};
-  const refineryUpdates = overview.refineryUpdates || [];
-  const regulationUpdates = overview.regulationUpdates || [];
+  const refineryUpdates = Array.isArray(data) ? data : (data?.data || data?.refineryUpdates || []);
 
   return (
     <div className="space-y-5">
-      <h3 className="text-lg font-semibold text-white" data-testid="text-refinery-title">Refinery & Regulation Intel</h3>
+      <h3 className="text-lg font-semibold text-white" data-testid="text-refinery-title">Refinery Intel</h3>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <Factory className="w-4 h-4" /> Refinery Updates
-          </h4>
-          {refineryUpdates.length > 0 ? refineryUpdates.map((update: any, i: number) => (
-            <div key={update.id || i} className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 space-y-2" data-testid={`card-refinery-${i}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white">{update.refineryName}</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                  update.operationalStatus === "operational" ? "text-emerald-400 bg-emerald-500/10" :
-                  update.operationalStatus === "maintenance" ? "text-amber-400 bg-amber-500/10" :
-                  "text-red-400 bg-red-500/10"
-                }`}>{update.operationalStatus}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">
-                <div>PMS: {update.pmsOutputEstimate}k bpd</div>
-                <div>AGO: {update.dieselOutputEstimate}k bpd</div>
-                <div>JET: {update.jetOutputEstimate}k bpd</div>
-              </div>
-              <div className="text-xs text-slate-600">Capacity: {update.productionCapacity}% &middot; Source: {update.updateSource}</div>
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <Factory className="w-4 h-4" /> Refinery Updates
+        </h4>
+        {refineryUpdates.length > 0 ? refineryUpdates.map((update: any, i: number) => (
+          <div key={update.id || i} className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 space-y-2" data-testid={`card-refinery-${i}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white">{update.refineryName}</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                update.operationalStatus === "operational" ? "text-emerald-400 bg-emerald-500/10" :
+                update.operationalStatus === "maintenance" ? "text-amber-400 bg-amber-500/10" :
+                "text-red-400 bg-red-500/10"
+              }`}>{update.operationalStatus}</span>
             </div>
-          )) : (
-            <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center text-sm text-slate-600" data-testid="empty-refinery">
-              No refinery updates available
+            <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">
+              <div>PMS: {update.pmsOutputEstimate}k bpd</div>
+              <div>AGO: {update.dieselOutputEstimate}k bpd</div>
+              <div>JET: {update.jetOutputEstimate}k bpd</div>
             </div>
-          )}
-        </div>
+            <div className="text-xs text-slate-600">Capacity: {update.productionCapacity}% &middot; Source: {update.updateSource}</div>
+          </div>
+        )) : (
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center text-sm text-slate-600" data-testid="empty-refinery">
+            No refinery updates available
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
+function RegulationUpdatesTab({ token, fetchFn, data }: { token: string | null; fetchFn: any; data: any }) {
+  const regulations = Array.isArray(data) ? data : (data?.data || []);
+
+  const { data: highImpactData } = useQuery<any>({
+    queryKey: ["/api/regulations/high-impact"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+
+  const highImpactRegs = Array.isArray(highImpactData) ? highImpactData : (highImpactData?.data || []);
+  const highImpactIds = new Set(highImpactRegs.map((r: any) => r.id));
+
+  return (
+    <div className="space-y-5">
+      <h3 className="text-lg font-semibold text-white" data-testid="text-regulation-title">Regulation Updates</h3>
+
+      {highImpactRegs.length > 0 && (
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" /> Regulation Alerts
+          <h4 className="text-sm font-semibold text-red-400 uppercase tracking-wider flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> High Impact Regulations
           </h4>
-          {regulationUpdates.length > 0 ? regulationUpdates.map((reg: any, i: number) => (
-            <div key={reg.id || i} className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 space-y-2" data-testid={`card-regulation-${i}`}>
+          {highImpactRegs.map((reg: any, i: number) => (
+            <div key={reg.id || i} className="rounded-xl bg-red-500/[0.05] border border-red-500/20 p-4 space-y-2" data-testid={`card-high-regulation-${i}`}>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-white">{reg.title}</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                  reg.impactLevel === "high" ? "text-red-400 bg-red-500/10" :
-                  reg.impactLevel === "medium" ? "text-amber-400 bg-amber-500/10" :
-                  "text-emerald-400 bg-emerald-500/10"
-                }`}>{reg.impactLevel}</span>
+                <span className="px-2 py-0.5 rounded text-xs font-semibold text-red-400 bg-red-500/10">HIGH IMPACT</span>
               </div>
               <p className="text-sm text-slate-400">{reg.summary}</p>
+              {reg.affectedProducts && reg.affectedProducts.length > 0 && (
+                <div className="flex gap-1.5">
+                  {reg.affectedProducts.map((p: string, j: number) => (
+                    <span key={j} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.04] text-slate-300">{p}</span>
+                  ))}
+                </div>
+              )}
               <div className="text-xs text-slate-600">
                 Effective: {reg.effectiveDate ? new Date(reg.effectiveDate).toLocaleDateString() : "—"} &middot; Source: {reg.source}
               </div>
             </div>
-          )) : (
-            <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center text-sm text-slate-600" data-testid="empty-regulations">
-              No regulation alerts available
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <ScrollText className="w-4 h-4" /> All Regulations
+        </h4>
+        {regulations.length > 0 ? regulations.filter((r: any) => !highImpactIds.has(r.id)).map((reg: any, i: number) => (
+          <div key={reg.id || i} className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 space-y-2" data-testid={`card-regulation-${i}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white">{reg.title}</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                reg.impactLevel === "high" ? "text-red-400 bg-red-500/10" :
+                reg.impactLevel === "medium" ? "text-amber-400 bg-amber-500/10" :
+                "text-emerald-400 bg-emerald-500/10"
+              }`}>{reg.impactLevel}</span>
             </div>
-          )}
+            <p className="text-sm text-slate-400">{reg.summary}</p>
+            {reg.affectedProducts && reg.affectedProducts.length > 0 && (
+              <div className="flex gap-1.5">
+                {reg.affectedProducts.map((p: string, j: number) => (
+                  <span key={j} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.04] text-slate-300">{p}</span>
+                ))}
+              </div>
+            )}
+            <div className="text-xs text-slate-600">
+              Effective: {reg.effectiveDate ? new Date(reg.effectiveDate).toLocaleDateString() : "—"} &middot; Source: {reg.source}
+            </div>
+          </div>
+        )) : (
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center text-sm text-slate-600" data-testid="empty-regulations">
+            No regulation updates available
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SettingsTab({ user, token, fetchFn, notifPrefs, refetchNotifPrefs }: { user: any; token: string | null; fetchFn: any; notifPrefs: any; refetchNotifPrefs: () => void }) {
+  const prefs = notifPrefs || {};
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [whatsappPhone, setWhatsappPhone] = useState("");
+
+  useEffect(() => {
+    if (prefs) {
+      setSmsEnabled(!!prefs.notificationPrefs?.smsEnabled);
+      setWhatsappEnabled(!!prefs.notificationPrefs?.whatsappEnabled);
+      setPhoneNumber(prefs.phone || "");
+      setWhatsappPhone(prefs.whatsappPhone || "");
+    }
+  }, [prefs]);
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", "/api/notifications/preferences", {
+        phone: phoneNumber,
+        whatsappPhone,
+        notificationPrefs: {
+          smsEnabled,
+          whatsappEnabled,
+        },
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/preferences"] });
+      refetchNotifPrefs();
+    },
+  });
+
+  const tierLabels: Record<string, { label: string; color: string }> = {
+    free: { label: "Free", color: "text-slate-400 bg-slate-500/10 border-slate-500/20" },
+    pro: { label: "Pro", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+    elite: { label: "Elite", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+  };
+
+  const tierInfo = tierLabels[user?.subscriptionTier] || tierLabels.free;
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <h3 className="text-lg font-semibold text-white" data-testid="text-settings-title">Settings</h3>
+
+      <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-6 space-y-4" data-testid="card-settings-profile">
+        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <User className="w-4 h-4" /> Profile
+        </h4>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wider">Name</label>
+            <div className="px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-sm text-white" data-testid="text-settings-name">
+              {user?.name || "—"}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wider">Email</label>
+            <div className="px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-sm text-white flex items-center gap-2" data-testid="text-settings-email">
+              <Mail className="w-3.5 h-3.5 text-slate-500" />
+              {user?.email || "—"}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wider">Role</label>
+            <div className="px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-sm text-white capitalize" data-testid="text-settings-role">
+              {user?.role || "marketer"}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wider">Subscription</label>
+            <div className="px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08]">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${tierInfo.color}`} data-testid="badge-settings-tier">
+                <Crown className="w-3 h-3" />
+                {tierInfo.label}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-6 space-y-4" data-testid="card-settings-notifications">
+        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <Bell className="w-4 h-4" /> Notification Preferences
+        </h4>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wider">Phone Number</label>
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-slate-500" />
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+234..."
+                className="flex-1 px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/30 placeholder-slate-600"
+                data-testid="input-settings-phone"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wider">WhatsApp Number</label>
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-slate-500" />
+              <input
+                type="tel"
+                value={whatsappPhone}
+                onChange={(e) => setWhatsappPhone(e.target.value)}
+                placeholder="+234..."
+                className="flex-1 px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/30 placeholder-slate-600"
+                data-testid="input-settings-whatsapp"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+            <div>
+              <div className="text-sm text-white">SMS Alerts</div>
+              <div className="text-xs text-slate-500">Receive price alerts and forecasts via SMS</div>
+            </div>
+            <button
+              onClick={() => setSmsEnabled(!smsEnabled)}
+              className={`w-11 h-6 rounded-full transition-colors relative ${smsEnabled ? "bg-emerald-500" : "bg-white/[0.1]"}`}
+              data-testid="toggle-sms"
+            >
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${smsEnabled ? "left-[22px]" : "left-0.5"}`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+            <div>
+              <div className="text-sm text-white">WhatsApp Alerts</div>
+              <div className="text-xs text-slate-500">Receive alerts on WhatsApp (Elite tier)</div>
+            </div>
+            <button
+              onClick={() => setWhatsappEnabled(!whatsappEnabled)}
+              className={`w-11 h-6 rounded-full transition-colors relative ${whatsappEnabled ? "bg-emerald-500" : "bg-white/[0.1]"}`}
+              data-testid="toggle-whatsapp"
+            >
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${whatsappEnabled ? "left-[22px]" : "left-0.5"}`} />
+            </button>
+          </div>
+          <Button
+            onClick={() => updateMutation.mutate()}
+            disabled={updateMutation.isPending}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+            data-testid="button-save-settings"
+          >
+            {updateMutation.isPending ? "Saving..." : "Save Preferences"}
+          </Button>
         </div>
       </div>
     </div>

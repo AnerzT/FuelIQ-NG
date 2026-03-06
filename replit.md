@@ -51,8 +51,14 @@ The FuelIQ NG platform is built with a modern, full-stack architecture.
     -   **API:** `GET /api/hedge/analysis?productType=` returns all three engine outputs + overall strategy. `POST /api/hedge/generate` creates AI recommendations.
 -   **Price History:** Tracks and displays historical petroleum product prices for different terminals by product type.
 -   **Notifications:** Supports SMS and WhatsApp notifications for forecast alerts, price spikes, refinery updates, and morning digests, configurable by the user based on their subscription tier.
+-   **Refinery Intel:** Dedicated endpoint (`GET /api/refinery/updates`, `GET /api/refinery/status`) with seeded data for 4 Nigerian refineries (Dangote, Port Harcourt, Warri, Kaduna) showing operational status, production capacity, and output estimates.
+-   **Regulation Updates:** Dedicated tab with `GET /api/regulations` and `GET /api/regulations/high-impact` endpoints. High-impact regulations highlighted with severity badges. Seeded with 5 realistic Nigerian regulation entries.
+-   **Settings:** Dashboard tab for profile display (name, email, role, subscription tier) and notification preferences (SMS/WhatsApp toggles, phone numbers). Maps to `PATCH /api/notifications/preferences` with correct schema `{ phone, whatsappPhone, notificationPrefs: { smsEnabled, whatsappEnabled } }`.
+-   **FX History:** `GET /api/fx/history` with pagination (limit, page) for historical USD/NGN rates.
+-   **Forecast History:** `GET /api/forecasts/history` with filters (terminalId, productType, limit, page) for historical forecasts.
+-   **Auth Token Refresh:** `POST /api/auth/refresh` — issues new JWT with extended expiry when called with valid Bearer token.
 -   **Admin Panel:** Provides administrative functionalities for managing users, subscriptions, terminals, depots, and triggering data synchronization.
--   **Advanced Dashboard:** 7-tab layout: Overview, Products, Depot Spread, Inventory, Hedge Lab, Trader Signals, Refinery Intel.
+-   **Advanced Dashboard:** 9-tab layout: Overview (with refinery status indicator, regulation impact, trader sentiment bar), Products, Depot Spread, Inventory, Hedge Lab, Trader Signals, Refinery Intel, Regulations, Settings.
 
 ## External Dependencies
 
