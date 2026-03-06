@@ -1,0 +1,21 @@
+{
+  "name": "FuelIQ NG",
+  "short_name": "FuelIQ",
+  "description": "Petroleum Market Forecast Platform for Nigerian Marketers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
