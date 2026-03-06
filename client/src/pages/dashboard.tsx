@@ -1014,35 +1014,13 @@ function AddInventoryForm({ token, terminalList, onSuccess }: { token: string | 
 function HedgeLabTab({ token, fetchFn, data, selectedProduct, setSelectedProduct }: { token: string | null; fetchFn: any; data: any; selectedProduct: string; setSelectedProduct: (v: string) => void }) {
   const recommendations = Array.isArray(data) ? data : (data?.recommendations || []);
 
-  const strategies = [
-    {
-      type: "forward_buying",
-      title: "Forward Buying",
-      icon: TrendingUp,
-      description: "Buy in bulk today when FX is rising, refinery output is falling, and vessel delays are high.",
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
-      border: "border-emerald-500/20",
-    },
-    {
-      type: "staggered_buying",
-      title: "Staggered Buying",
-      icon: BarChart3,
-      description: "Split purchases: 40% today, 30% in 3 days, 30% next week. Based on forecast volatility.",
-      color: "text-blue-400",
-      bg: "bg-blue-500/10",
-      border: "border-blue-500/20",
-    },
-    {
-      type: "margin_protection",
-      title: "Margin Protection",
-      icon: ShieldCheck,
-      description: "If inventory cost exceeds forecasted price, offload a percentage of stock to protect margins.",
-      color: "text-amber-400",
-      bg: "bg-amber-500/10",
-      border: "border-amber-500/20",
-    },
-  ];
+  const { data: analysisData, refetch: refetchAnalysis } = useQuery<any>({
+    queryKey: [`/api/hedge/analysis?productType=${selectedProduct}`],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+
+  const analysis = analysisData || null;
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -1051,8 +1029,22 @@ function HedgeLabTab({ token, fetchFn, data, selectedProduct, setSelectedProduct
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/hedge?productType=${selectedProduct}`] });
+      refetchAnalysis();
     },
   });
+
+  const riskColors: Record<string, string> = {
+    low: "text-emerald-400",
+    medium: "text-amber-400",
+    high: "text-red-400",
+    critical: "text-red-500",
+  };
+  const riskBg: Record<string, string> = {
+    low: "bg-emerald-500/10 border-emerald-500/20",
+    medium: "bg-amber-500/10 border-amber-500/20",
+    high: "bg-red-500/10 border-red-500/20",
+    critical: "bg-red-500/15 border-red-500/30",
+  };
 
   return (
     <div className="space-y-5">
@@ -1081,37 +1073,130 @@ function HedgeLabTab({ token, fetchFn, data, selectedProduct, setSelectedProduct
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        {strategies.map((s) => (
-          <div key={s.type} className={`rounded-xl ${s.bg} border ${s.border} p-5 space-y-3`} data-testid={`card-strategy-${s.type}`}>
-            <div className="flex items-center gap-2">
-              <s.icon className={`w-5 h-5 ${s.color}`} />
-              <h4 className={`text-sm font-semibold ${s.color}`}>{s.title}</h4>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">{s.description}</p>
+      {analysis && (
+        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4" data-testid="card-overall-strategy">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck className={`w-5 h-5 ${riskColors[analysis.overallRiskLevel] || "text-slate-400"}`} />
+            <span className="text-sm font-semibold text-white">Overall Strategy</span>
+            <span className={`ml-auto text-xs font-semibold uppercase ${riskColors[analysis.overallRiskLevel] || "text-slate-400"}`}>
+              {analysis.overallRiskLevel} risk
+            </span>
           </div>
-        ))}
+          <p className="text-sm text-slate-400">{analysis.overallStrategy}</p>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className={`rounded-xl border p-5 space-y-3 ${analysis?.inventoryRisk ? riskBg[analysis.inventoryRisk.riskLevel] || "bg-white/[0.02] border-white/[0.06]" : "bg-red-500/10 border-red-500/20"}`} data-testid="card-engine-inventory-risk">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+            <h4 className="text-sm font-semibold text-red-400">Inventory Risk Engine</h4>
+          </div>
+          {analysis?.inventoryRisk ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Risk Exposure</span>
+                <span className="text-white font-mono">₦{(analysis.inventoryRisk.riskExposure || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Unrealized P&L</span>
+                <span className={`font-mono ${(analysis.inventoryRisk.unrealizedPnL || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {(analysis.inventoryRisk.unrealizedPnL || 0) >= 0 ? "+" : ""}₦{(analysis.inventoryRisk.unrealizedPnL || 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Drop Probability</span>
+                <span className="text-white font-mono">{analysis.inventoryRisk.dropProbability}%</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed mt-1">{analysis.inventoryRisk.reasoning}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Exposure = volume × drop_probability × (avg_cost − expected_price)</p>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-5 space-y-3" data-testid="card-engine-staggered-buy">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-blue-400" />
+            <h4 className="text-sm font-semibold text-blue-400">Staggered Buy Optimizer</h4>
+          </div>
+          {analysis?.staggeredBuy ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Volatility Index</span>
+                <span className="text-white font-mono">{(analysis.staggeredBuy.volatilityIndex * 100).toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Liquidity Score</span>
+                <span className="text-white font-mono">{(analysis.staggeredBuy.liquidityScore * 100).toFixed(1)}%</span>
+              </div>
+              <div className="space-y-1.5 mt-2">
+                {analysis.staggeredBuy.splits?.map((s: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-10 text-right text-xs font-bold text-blue-300">{s.percentage}%</div>
+                    <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-400 rounded-full" style={{ width: `${s.percentage}%` }} />
+                    </div>
+                    <div className="text-xs text-slate-500 w-20">{s.timing}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Optimal split = volatility_index / liquidity_score</p>
+          )}
+        </div>
+
+        <div className={`rounded-xl border p-5 space-y-3 ${analysis?.arbitrage?.hasOpportunity ? "bg-emerald-500/10 border-emerald-500/20" : "bg-amber-500/10 border-amber-500/20"}`} data-testid="card-engine-arbitrage">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-amber-400" />
+            <h4 className="text-sm font-semibold text-amber-400">Arbitrage Engine</h4>
+          </div>
+          {analysis?.arbitrage ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Spread</span>
+                <span className="text-white font-mono">₦{analysis.arbitrage.spread}/L</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Transport Cost</span>
+                <span className="text-white font-mono">₦{analysis.arbitrage.transportCost}/L</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Net Profit</span>
+                <span className={`font-mono ${analysis.arbitrage.netProfit > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  ₦{analysis.arbitrage.netProfit}/L
+                </span>
+              </div>
+              {analysis.arbitrage.hasOpportunity && (
+                <div className="mt-2 px-2 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-xs text-emerald-400 font-semibold">Opportunity: {analysis.arbitrage.profitMarginPercent}% margin</p>
+                  <p className="text-xs text-slate-500">{analysis.arbitrage.lowestDepot?.name} → {analysis.arbitrage.highestDepot?.name}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Arbitrage when spread {">"} transport_cost</p>
+          )}
+        </div>
       </div>
 
       <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Recommendations</h4>
-        {recommendations.length > 0 ? recommendations.map((rec: any, i: number) => {
-          const riskColors: Record<string, string> = { low: "text-emerald-400", medium: "text-amber-400", high: "text-red-400" };
-          return (
-            <div key={rec.id || i} className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 space-y-2" data-testid={`card-hedge-${i}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white capitalize">{rec.strategyType?.replace(/_/g, " ")}</span>
-                <span className={`text-xs font-semibold ${riskColors[rec.riskLevel] || "text-slate-400"}`}>
-                  Risk: {rec.riskLevel?.toUpperCase()}
-                </span>
-              </div>
-              <p className="text-sm text-slate-400">{rec.reasoning}</p>
-              {rec.expectedMarginImpact && (
-                <div className="text-xs text-slate-500">Expected margin impact: {rec.expectedMarginImpact > 0 ? "+" : ""}{rec.expectedMarginImpact.toFixed(1)}%</div>
-              )}
+        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">AI Recommendations</h4>
+        {recommendations.length > 0 ? recommendations.map((rec: any, i: number) => (
+          <div key={rec.id || i} className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 space-y-2" data-testid={`card-hedge-${i}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white capitalize">{rec.strategyType?.replace(/_/g, " ")}</span>
+              <span className={`text-xs font-semibold ${riskColors[rec.riskLevel] || "text-slate-400"}`}>
+                Risk: {rec.riskLevel?.toUpperCase()}
+              </span>
             </div>
-          );
-        }) : (
+            <p className="text-sm text-slate-400">{rec.reasoning}</p>
+            {rec.expectedMarginImpact !== undefined && rec.expectedMarginImpact !== null && (
+              <div className="text-xs text-slate-500">Expected margin impact: {rec.expectedMarginImpact > 0 ? "+" : ""}{rec.expectedMarginImpact.toFixed(1)}%</div>
+            )}
+          </div>
+        )) : (
           <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center text-sm text-slate-600" data-testid="empty-hedge">
             No recommendations yet. Click "Generate" to analyze current market conditions.
           </div>

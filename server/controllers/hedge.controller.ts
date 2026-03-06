@@ -2,82 +2,7 @@ import type { Response } from "express";
 import { storage } from "../storage";
 import type { AuthRequest } from "../middleware/auth";
 import { PRODUCT_TYPES } from "@shared/schema";
-
-interface HedgeStrategy {
-  strategyType: string;
-  reasoning: string;
-  riskLevel: string;
-  expectedMarginImpact: number;
-}
-
-function generateStrategies(
-  bias: string,
-  confidence: number,
-  avgCost: number,
-  currentPrice: number,
-  volume: number,
-  productType: string
-): HedgeStrategy[] {
-  const strategies: HedgeStrategy[] = [];
-  const priceDelta = currentPrice - avgCost;
-  const priceDeltaPercent = avgCost > 0 ? (priceDelta / avgCost) * 100 : 0;
-
-  if (bias === "bullish" && confidence >= 60) {
-    strategies.push({
-      strategyType: "Forward Buying",
-      reasoning: `Market signals indicate ${productType} prices are likely to rise (${confidence}% confidence). Lock in current prices by purchasing additional volume now to protect against future price increases.`,
-      riskLevel: confidence >= 75 ? "low" : "medium",
-      expectedMarginImpact: Math.round(priceDeltaPercent * 0.7 * 100) / 100,
-    });
-  }
-
-  if (bias === "bearish" || (bias === "neutral" && confidence < 60)) {
-    strategies.push({
-      strategyType: "Staggered Purchase",
-      reasoning: `${productType} prices show ${bias} tendency. Spread purchases over multiple days to average out price volatility and reduce downside risk.`,
-      riskLevel: "low",
-      expectedMarginImpact: Math.round(Math.abs(priceDeltaPercent) * 0.3 * 100) / 100,
-    });
-  }
-
-  if (volume > 0 && priceDelta > 0) {
-    strategies.push({
-      strategyType: "Margin Protection",
-      reasoning: `Current ${productType} market price (₦${currentPrice.toFixed(0)}) is above your average cost (₦${avgCost.toFixed(0)}). Consider selling a portion of your ${volume.toLocaleString()}L inventory to lock in ₦${priceDelta.toFixed(0)}/L profit.`,
-      riskLevel: "low",
-      expectedMarginImpact: Math.round(priceDeltaPercent * 100) / 100,
-    });
-  }
-
-  if (volume > 0 && priceDelta < 0) {
-    strategies.push({
-      strategyType: "Cost Averaging",
-      reasoning: `${productType} current price (₦${currentPrice.toFixed(0)}) is below your average cost (₦${avgCost.toFixed(0)}). Buying additional volume now can reduce your overall average cost per litre.`,
-      riskLevel: "medium",
-      expectedMarginImpact: Math.round(priceDeltaPercent * 0.5 * 100) / 100,
-    });
-  }
-
-  if (bias === "neutral" && confidence >= 60) {
-    strategies.push({
-      strategyType: "Hold Position",
-      reasoning: `${productType} market is stable with neutral bias and ${confidence}% confidence. Maintain current inventory levels and monitor for signal changes before committing to new purchases.`,
-      riskLevel: "low",
-      expectedMarginImpact: 0,
-    });
-  }
-
-  if (strategies.length === 0) {
-    strategies.push({
-      strategyType: "Monitor & Wait",
-      reasoning: `Insufficient signal clarity for ${productType}. Continue monitoring market conditions before taking action. Set price alerts for key thresholds.`,
-      riskLevel: "low",
-      expectedMarginImpact: 0,
-    });
-  }
-
-  return strategies;
-}
+import { computeAdvancedHedge, computeArbitrage } from "../services/hedgeEngine";
 
 export async function getHedgeRecommendations(req: AuthRequest, res: Response) {
   try {
@@ -100,6 +25,7 @@ export async function generateHedgeRecommendations(req: AuthRequest, res: Respon
 
     const productsToAnalyze = productType ? [productType] : [...PRODUCT_TYPES];
     const allRecommendations: any[] = [];
+    const advancedAnalysis: Record<string, any> = {};
 
     for (const pt of productsToAnalyze) {
       const inventoryItems = await storage.getInventory(userId, terminalId, pt);
@@ -122,24 +48,169 @@ export async function generateHedgeRecommendations(req: AuthRequest, res: Respon
       const bias = forecast?.bias || "neutral";
       const confidence = forecast?.confidence || 50;
 
-      const strategies = generateStrategies(bias, confidence, weightedAvgCost, currentPrice, totalVolume, pt);
+      const history = terminalId
+        ? await storage.getPriceHistory(terminalId, 30, pt)
+        : (inventoryItems.length > 0 ? await storage.getPriceHistory(inventoryItems[0].terminalId, 30, pt) : []);
 
-      for (const strategy of strategies) {
+      const prices = history.map((h) => h.price);
+      const mean = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : currentPrice;
+      const variance = prices.length > 2 ? prices.reduce((a, b) => a + (b - mean) ** 2, 0) / prices.length : 0;
+      const stdDev = Math.sqrt(variance);
+      const historicalVolatility = mean > 0 ? Math.min(stdDev / mean, 1) : 0.5;
+
+      const depotPricesData = await storage.getDepotPrices(undefined, pt);
+      const depotPrices = depotPricesData.map((d) => ({
+        depotName: d.depotName || "Unknown",
+        price: d.price,
+      }));
+
+      const dropProbability = bias === "bearish" ? 60 : bias === "neutral" ? 35 : 15;
+      const demandIndex = bias === "bullish" ? 0.75 : bias === "bearish" ? 0.35 : 0.55;
+
+      const advanced = computeAdvancedHedge({
+        inventoryVolume: totalVolume,
+        averageCost: weightedAvgCost,
+        currentPrice,
+        forecastBias: bias,
+        forecastConfidence: confidence,
+        dropProbability,
+        historicalVolatility,
+        demandIndex,
+        fxVolatility: 0.5,
+        productType: pt,
+        depotPrices,
+      });
+
+      advancedAnalysis[pt] = advanced;
+
+      if (advanced.inventoryRisk.riskLevel !== "low" && totalVolume > 0) {
         const rec = await storage.createHedgeRecommendation({
           userId,
           productType: pt,
-          strategyType: strategy.strategyType,
-          reasoning: strategy.reasoning,
-          riskLevel: strategy.riskLevel,
-          expectedMarginImpact: strategy.expectedMarginImpact,
+          strategyType: "Inventory Risk Alert",
+          reasoning: advanced.inventoryRisk.reasoning,
+          riskLevel: advanced.inventoryRisk.riskLevel,
+          expectedMarginImpact: Math.round((advanced.inventoryRisk.unrealizedPnL / Math.max(totalVolume * weightedAvgCost, 1)) * 100 * 100) / 100,
         });
         allRecommendations.push(rec);
+      }
+
+      if (bias === "bullish" && confidence >= 60) {
+        const rec = await storage.createHedgeRecommendation({
+          userId,
+          productType: pt,
+          strategyType: "Forward Buying",
+          reasoning: `${pt} prices likely to rise (${confidence}% confidence). ${advanced.staggeredBuy.reasoning}`,
+          riskLevel: confidence >= 75 ? "low" : "medium",
+          expectedMarginImpact: Math.round((currentPrice - weightedAvgCost) / Math.max(weightedAvgCost, 1) * 100 * 100) / 100,
+        });
+        allRecommendations.push(rec);
+      }
+
+      const rec2 = await storage.createHedgeRecommendation({
+        userId,
+        productType: pt,
+        strategyType: "Staggered Purchase",
+        reasoning: advanced.staggeredBuy.reasoning,
+        riskLevel: advanced.staggeredBuy.volatilityIndex > 0.6 ? "medium" : "low",
+        expectedMarginImpact: Math.round(advanced.staggeredBuy.volatilityIndex * 2 * 100) / 100,
+      });
+      allRecommendations.push(rec2);
+
+      if (advanced.arbitrage?.hasOpportunity) {
+        const rec3 = await storage.createHedgeRecommendation({
+          userId,
+          productType: pt,
+          strategyType: "Depot Arbitrage",
+          reasoning: advanced.arbitrage.reasoning,
+          riskLevel: advanced.arbitrage.profitMarginPercent > 1 ? "low" : "medium",
+          expectedMarginImpact: advanced.arbitrage.profitMarginPercent,
+        });
+        allRecommendations.push(rec3);
+      }
+
+      if (totalVolume > 0 && currentPrice > weightedAvgCost) {
+        const rec4 = await storage.createHedgeRecommendation({
+          userId,
+          productType: pt,
+          strategyType: "Margin Protection",
+          reasoning: `Current ${pt} price (₦${currentPrice.toFixed(0)}) is above avg cost (₦${weightedAvgCost.toFixed(0)}). Consider selling a portion of ${totalVolume.toLocaleString()}L to lock in ₦${(currentPrice - weightedAvgCost).toFixed(0)}/L profit.`,
+          riskLevel: "low",
+          expectedMarginImpact: Math.round((currentPrice - weightedAvgCost) / Math.max(weightedAvgCost, 1) * 100 * 100) / 100,
+        });
+        allRecommendations.push(rec4);
       }
     }
 
     return res.status(201).json({
       success: true,
       data: allRecommendations,
+      analysis: advancedAnalysis,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getAdvancedAnalysis(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!;
+    const productType = (req.query.productType as string) || "PMS";
+    const terminalId = req.query.terminalId as string | undefined;
+
+    const inventoryItems = await storage.getInventory(userId, terminalId, productType);
+    const totalVolume = inventoryItems.reduce((sum, i) => sum + i.volumeLitres, 0);
+    const weightedAvgCost = totalVolume > 0
+      ? inventoryItems.reduce((sum, i) => sum + i.averageCost * i.volumeLitres, 0) / totalVolume
+      : 0;
+
+    let forecast = null;
+    if (terminalId) {
+      forecast = await storage.getLatestForecast(terminalId, productType);
+    } else if (inventoryItems.length > 0) {
+      forecast = await storage.getLatestForecast(inventoryItems[0].terminalId, productType);
+    }
+
+    const currentPrice = forecast
+      ? (forecast.expectedMin + forecast.expectedMax) / 2
+      : weightedAvgCost || 620;
+
+    const bias = forecast?.bias || "neutral";
+    const confidence = forecast?.confidence || 50;
+
+    const tId = terminalId || (inventoryItems.length > 0 ? inventoryItems[0].terminalId : undefined);
+    const history = tId ? await storage.getPriceHistory(tId, 30, productType) : [];
+    const prices = history.map((h) => h.price);
+    const mean = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : currentPrice;
+    const variance = prices.length > 2 ? prices.reduce((a, b) => a + (b - mean) ** 2, 0) / prices.length : 0;
+    const historicalVolatility = mean > 0 ? Math.min(Math.sqrt(variance) / mean, 1) : 0.5;
+
+    const depotPricesData = await storage.getDepotPrices(undefined, productType);
+    const depotPrices = depotPricesData.map((d) => ({
+      depotName: d.depotName || "Unknown",
+      price: d.price,
+    }));
+
+    const dropProbability = bias === "bearish" ? 60 : bias === "neutral" ? 35 : 15;
+    const demandIndex = bias === "bullish" ? 0.75 : bias === "bearish" ? 0.35 : 0.55;
+
+    const analysis = computeAdvancedHedge({
+      inventoryVolume: totalVolume,
+      averageCost: weightedAvgCost,
+      currentPrice,
+      forecastBias: bias,
+      forecastConfidence: confidence,
+      dropProbability,
+      historicalVolatility,
+      demandIndex,
+      fxVolatility: 0.5,
+      productType,
+      depotPrices,
+    });
+
+    return res.json({
+      success: true,
+      data: analysis,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });

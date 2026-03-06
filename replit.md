@@ -40,11 +40,15 @@ The FuelIQ NG platform is built with a modern, full-stack architecture.
 -   **Market Signals:** Captures and processes various market signals (vessel activity, truck queue, NNPC supply, FX pressure, policy risk) per product type.
 -   **Forecast Engine:**
     -   **Rules-Based Engine:** Product-aware heuristic engine with product-specific weights/base prices.
-    -   **AI Scoring Engine:** Multi-product forecasting engine with 9 normalized inputs, product-specific adaptive weights, softmax probabilities, and enriched output (depotPrice, refineryInfluenceScore, importParityPrice, demandIndex).
+    -   **AI Scoring Engine (Logistic Probability Model):** 8-feature vector (fxVolatility, vesselCount, refineryOutputIndex, depotSpread, regulationImpact, demandIndex, historicalVolatility, traderSentimentScore) with sigmoid function, product-specific adaptive weights, softmax probabilities, riskFactor computation, expected range from stdDev × riskFactor, and enriched output (depotPrice, refineryInfluenceScore, importParityPrice, demandIndex).
 -   **Depot Price Comparison:** Matrix view of depot prices across terminals and products with lowest price highlight, spread calculation, and arbitrage % opportunity.
 -   **Inventory Management:** Track tank stock per terminal/product, unrealized P&L, BUY/SELL transactions with weighted-average cost recalculation, restock alerts.
 -   **Trader Chat Intelligence:** Free-text market intel from traders with automatic keyword extraction, sentiment scoring, terminal/product detection.
--   **Hedge Strategy Lab:** Forward Buying, Staggered Buying, and Margin Protection strategies with risk assessment and expected margin impact.
+-   **Hedge Strategy Lab (3 Advanced Engines):**
+    -   **Inventory Risk Engine:** Computes risk exposure = volume × dropProbability × priceDelta, with 4-level risk classification (low/medium/high/critical).
+    -   **Staggered Buy Optimizer:** Calculates optimal split ratio from volatilityIndex/liquidityScore, generates 2-4 purchase tranches with timing recommendations.
+    -   **Arbitrage Engine:** Identifies cross-depot arbitrage opportunities where spread > transport cost, showing net profit per litre and profit margin %.
+    -   **API:** `GET /api/hedge/analysis?productType=` returns all three engine outputs + overall strategy. `POST /api/hedge/generate` creates AI recommendations.
 -   **Price History:** Tracks and displays historical petroleum product prices for different terminals by product type.
 -   **Notifications:** Supports SMS and WhatsApp notifications for forecast alerts, price spikes, refinery updates, and morning digests, configurable by the user based on their subscription tier.
 -   **Admin Panel:** Provides administrative functionalities for managing users, subscriptions, terminals, depots, and triggering data synchronization.

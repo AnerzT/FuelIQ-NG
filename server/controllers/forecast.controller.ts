@@ -182,6 +182,7 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
           expectedRange: score.expectedRange,
           confidence: score.confidence,
           suggestedAction: score.suggestedAction,
+          riskFactor: score.riskFactor,
           scoring: score.scoring,
         },
         signalSnapshot: signal,

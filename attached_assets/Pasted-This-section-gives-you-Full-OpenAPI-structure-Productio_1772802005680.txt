@@ -1,0 +1,224 @@
+This section gives you:
+
+✅ Full OpenAPI structure
+
+✅ Production-ready Prisma schema (complete)
+
+✅ Backend controller architecture
+
+✅ Enterprise UI wireframe system
+
+✅ Shareholder structure template
+
+✅ Operational launch plan
+
+This is now CTO-level documentation.
+
+1️⃣ FULL OPENAPI SPECIFICATION STRUCTURE
+
+Base URL:
+
+https://api.fueliq.ng/v1
+🔐 AUTH
+POST /auth/register
+POST /auth/login
+POST /auth/refresh
+POST /auth/2fa/verify
+👤 USER
+GET /users/me
+PATCH /users/me
+GET /users/notifications
+🛢 TERMINALS
+GET /terminals
+GET /terminals/{id}
+GET /terminals/{id}/products
+📊 FORECASTS
+GET /forecasts?terminal=apapa&product=PMS
+GET /forecasts/history
+POST /forecasts/manual (admin only)
+
+Response:
+
+{
+  "product": "AGO",
+  "terminal": "Warri",
+  "bias": "Bullish",
+  "probability": 0.78,
+  "expectedRange": [890, 920],
+  "confidence": 82
+}
+🏭 REFINERY INTEL
+GET /refinery/updates
+GET /refinery/status
+📜 REGULATION INTEL
+GET /regulations
+GET /regulations/high-impact
+💱 FX
+GET /fx/current
+GET /fx/history
+🚢 VESSEL TRACKING
+GET /vessels?terminal=calabar
+🏢 DEPOT SPREAD
+GET /depots?terminal=warri
+GET /depot-prices?product=AGO
+📦 INVENTORY
+GET /inventory
+POST /inventory
+POST /inventory/transaction
+🧠 TRADER INTEL
+POST /trader/analyze-message
+GET /trader/signals
+🛡 HEDGE LAB
+GET /hedge/recommendations
+POST /hedge/calculate
+🔔 NOTIFICATIONS
+POST /notifications/sms
+POST /notifications/whatsapp
+2️⃣ COMPLETE PRISMA SCHEMA (ENTERPRISE READY)
+
+Here is the consolidated production structure:
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          Role     @default(MARKETER)
+  subscription  SubscriptionTier
+  createdAt     DateTime @default(now())
+  inventories   Inventory[]
+}
+
+model Terminal {
+  id        String   @id @default(uuid())
+  name      String
+  state     String
+  active    Boolean  @default(true)
+  depots    Depot[]
+  forecasts Forecast[]
+}
+
+model Forecast {
+  id              String   @id @default(uuid())
+  terminalId      String
+  productType     Product
+  bias            MarketBias
+  probability     Float
+  expectedMin     Float
+  expectedMax     Float
+  confidence      Float
+  createdAt       DateTime @default(now())
+}
+
+model Depot {
+  id          String @id @default(uuid())
+  name        String
+  terminalId  String
+  prices      DepotPrice[]
+}
+
+model DepotPrice {
+  id          String   @id @default(uuid())
+  depotId     String
+  productType Product
+  price       Float
+  updatedAt   DateTime @default(now())
+}
+
+model Inventory {
+  id           String   @id @default(uuid())
+  userId       String
+  terminalId   String
+  productType  Product
+  volume       Float
+  averageCost  Float
+}
+
+enum Product {
+  PMS
+  AGO
+  JET_A1
+  ATK
+  LPG
+}
+
+enum MarketBias {
+  Bullish
+  Bearish
+  Neutral
+}
+
+enum Role {
+  ADMIN
+  MARKETER
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  ELITE
+}
+3️⃣ BACKEND CONTROLLER STRUCTURE
+/api
+ ├── auth.controller.ts
+ ├── forecast.controller.ts
+ ├── depot.controller.ts
+ ├── inventory.controller.ts
+ ├── hedge.controller.ts
+ ├── refinery.controller.ts
+ ├── regulation.controller.ts
+ ├── trader.controller.ts
+ └── notification.controller.ts
+
+Each controller:
+
+Validates request
+
+Checks subscription tier
+
+Calls service layer
+
+Logs audit
+
+Returns structured JSON
+
+4️⃣ ENTERPRISE DASHBOARD UI STRUCTURE
+Sidebar
+
+Overview
+
+Products
+
+Depot Spread
+
+Inventory
+
+Hedge Lab
+
+Trader Intel
+
+Refinery Updates
+
+Regulation Updates
+
+Settings
+
+Overview Page Layout
+
+Top:
+
+Market Pulse (all products)
+
+FX trend
+
+Refinery status indicator
+
+Middle:
+
+Forecast heatmap per terminal
+
+Bottom:
+
+Latest regulation impact
+
+Trader sentiment bar

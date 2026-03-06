@@ -61,6 +61,7 @@ import {
 import {
   getHedgeRecommendations,
   generateHedgeRecommendations,
+  getAdvancedAnalysis,
 } from "./controllers/hedge.controller";
 import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard";
 import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers } from "./seed";
@@ -147,6 +148,7 @@ export async function registerRoutes(
 
   app.get("/api/hedge", ...withTier, requireTier("pro"), getHedgeRecommendations);
   app.post("/api/hedge/generate", ...withTier, requireTier("pro"), generateHedgeRecommendations);
+  app.get("/api/hedge/analysis", ...withTier, requireTier("pro"), getAdvancedAnalysis);
 
   return httpServer;
 }
