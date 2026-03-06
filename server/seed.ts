@@ -1,6 +1,7 @@
 import { db } from "./storage";
-import { terminals, marketSignals, forecasts, priceHistory } from "@shared/schema";
+import { users, terminals, marketSignals, forecasts, priceHistory } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 const TERMINAL_SEEDS = [
   { name: "Apapa", state: "Lagos", code: "APA" },
@@ -69,4 +70,30 @@ export async function seedDatabase() {
   }
 
   console.log("Database seeded successfully with 8 terminals.");
+
+  const existingAdmin = await db.select().from(users).where(eq(users.email, "admin@fueliq.ng"));
+  if (existingAdmin.length === 0) {
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    await db.insert(users).values({
+      name: "Admin",
+      email: "admin@fueliq.ng",
+      password: hashedPassword,
+      role: "admin",
+    });
+    console.log("Admin user seeded.");
+  }
+}
+
+export async function seedAdminUser() {
+  const existingAdmin = await db.select().from(users).where(eq(users.email, "admin@fueliq.ng"));
+  if (existingAdmin.length === 0) {
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    await db.insert(users).values({
+      name: "Admin",
+      email: "admin@fueliq.ng",
+      password: hashedPassword,
+      role: "admin",
+    });
+    console.log("Admin user seeded.");
+  }
 }

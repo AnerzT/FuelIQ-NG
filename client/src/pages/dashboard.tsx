@@ -263,6 +263,16 @@ export default function Dashboard() {
                 <Bell className="w-4 h-4 text-slate-400" />
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </button>
+              {user.role === "admin" && (
+                <button
+                  onClick={() => setLocation("/admin")}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors"
+                  data-testid="button-admin-panel"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Admin</span>
+                </button>
+              )}
               <div className="flex items-center gap-2 pl-2 border-l border-white/[0.06]">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white">
                   {user.name?.charAt(0)?.toUpperCase() || "U"}

@@ -28,6 +28,10 @@ export interface IStorage {
 
   getPriceHistory(terminalId: string, limit?: number): Promise<PriceHistoryEntry[]>;
   createPriceHistory(entry: Omit<PriceHistoryEntry, "id">): Promise<PriceHistoryEntry>;
+
+  updateTerminal(id: string, data: Partial<Pick<Terminal, "active" | "name" | "state">>): Promise<Terminal | undefined>;
+  getAllForecasts(limit?: number): Promise<(Forecast & { terminalName?: string })[]>;
+  getForecasts(terminalId: string, limit?: number): Promise<(Forecast & { terminalName?: string })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -96,6 +100,52 @@ export class DatabaseStorage implements IStorage {
   async createPriceHistory(entry: Omit<PriceHistoryEntry, "id">): Promise<PriceHistoryEntry> {
     const [created] = await db.insert(priceHistory).values(entry).returning();
     return created;
+  }
+
+  async updateTerminal(id: string, data: Partial<Pick<Terminal, "active" | "name" | "state">>): Promise<Terminal | undefined> {
+    const [updated] = await db.update(terminals).set(data).where(eq(terminals.id, id)).returning();
+    return updated;
+  }
+
+  async getAllForecasts(limit = 50): Promise<(Forecast & { terminalName?: string })[]> {
+    const rows = await db
+      .select({
+        id: forecasts.id,
+        terminalId: forecasts.terminalId,
+        expectedMin: forecasts.expectedMin,
+        expectedMax: forecasts.expectedMax,
+        bias: forecasts.bias,
+        confidence: forecasts.confidence,
+        suggestedAction: forecasts.suggestedAction,
+        createdAt: forecasts.createdAt,
+        terminalName: terminals.name,
+      })
+      .from(forecasts)
+      .leftJoin(terminals, eq(forecasts.terminalId, terminals.id))
+      .orderBy(desc(forecasts.createdAt))
+      .limit(limit);
+    return rows;
+  }
+
+  async getForecasts(terminalId: string, limit = 20): Promise<(Forecast & { terminalName?: string })[]> {
+    const rows = await db
+      .select({
+        id: forecasts.id,
+        terminalId: forecasts.terminalId,
+        expectedMin: forecasts.expectedMin,
+        expectedMax: forecasts.expectedMax,
+        bias: forecasts.bias,
+        confidence: forecasts.confidence,
+        suggestedAction: forecasts.suggestedAction,
+        createdAt: forecasts.createdAt,
+        terminalName: terminals.name,
+      })
+      .from(forecasts)
+      .leftJoin(terminals, eq(forecasts.terminalId, terminals.id))
+      .where(eq(forecasts.terminalId, terminalId))
+      .orderBy(desc(forecasts.createdAt))
+      .limit(limit);
+    return rows;
   }
 }
 

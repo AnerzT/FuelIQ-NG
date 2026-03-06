@@ -5,6 +5,7 @@ const JWT_SECRET = process.env.SESSION_SECRET || "fueliq-ng-secret-key";
 
 export interface AuthRequest extends Request {
   userId?: string;
+  userRole?: string;
 }
 
 export function generateToken(userId: string): string {
@@ -30,4 +31,25 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   } catch {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
+}
+
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.userRole || req.userRole !== "admin") {
+    return res.status(403).json({ success: false, message: "Admin access required" });
+  }
+  next();
+}
+
+export function attachUserRole(storageInstance: { getUser: (id: string) => Promise<{ role: string } | undefined> }) {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.userId) {
+      try {
+        const user = await storageInstance.getUser(req.userId);
+        if (user) {
+          req.userRole = user.role;
+        }
+      } catch {}
+    }
+    next();
+  };
 }

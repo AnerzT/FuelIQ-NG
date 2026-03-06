@@ -64,7 +64,9 @@ Computes forecasts from market signals and price history:
 - `client/src/lib/api.ts` - Auth-aware fetch helper for TanStack Query
 - `client/src/pages/landing.tsx` - Public landing page
 - `client/src/pages/dashboard.tsx` - Main dashboard (authenticated)
+- `client/src/pages/admin.tsx` - Admin panel (admin role required)
 - `client/src/pages/login.tsx` / `register.tsx` - Auth pages
+- `server/controllers/admin.controller.ts` - Admin API handlers
 
 ## API Endpoints
 
@@ -80,6 +82,18 @@ All protected routes require JWT Bearer token in Authorization header.
 - `GET /api/signals/:terminalId` - Get signals for terminal (protected)
 - `POST /api/signals` - Create market signal (protected)
 - `GET /api/terminals/:id/price-history` - Get price history (protected)
+
+### Admin Endpoints (require admin role)
+
+Admin routes use `requireAuth → attachUserRole → requireAdmin` middleware chain.
+
+- `GET /api/admin/terminals` - List all terminals (admin)
+- `PATCH /api/admin/terminals/:id` - Toggle terminal active/inactive (admin)
+- `POST /api/admin/forecasts` - Create manual forecast (admin)
+- `POST /api/admin/signals` - Update market signals (admin)
+- `GET /api/admin/forecasts` - Get forecast history, optional `?terminalId=` filter (admin)
+
+Admin user: `admin@fueliq.ng` (seeded on startup)
 
 ## API Response Format
 
