@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("marketer")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("prisma_users")
+}
+
+model Terminal {
+  id            String         @id @default(uuid())
+  name          String
+  state         String
+  code          String         @unique
+  active        Boolean        @default(true)
+  marketSignals MarketSignal[]
+  forecasts     Forecast[]
+  priceHistory  PriceHistory[]
+
+  @@map("prisma_terminals")
+}
+
+model MarketSignal {
+  id             String   @id @default(uuid())
+  terminalId     String   @map("terminal_id")
+  vesselActivity String   @map("vessel_activity")
+  truckQueue     String   @map("truck_queue")
+  nnpcSupply     String   @map("nnpc_supply")
+  fxPressure     String   @map("fx_pressure")
+  policyRisk     String   @map("policy_risk")
+  createdAt      DateTime @default(now()) @map("created_at")
+  terminal       Terminal @relation(fields: [terminalId], references: [id])
+
+  @@map("prisma_market_signals")
+}
+
+model Forecast {
+  id              String   @id @default(uuid())
+  terminalId      String   @map("terminal_id")
+  expectedMin     Float    @map("expected_min")
+  expectedMax     Float    @map("expected_max")
+  bias            String   @default("neutral")
+  confidence      Int
+  suggestedAction String   @map("suggested_action")
+  createdAt       DateTime @default(now()) @map("created_at")
+  terminal        Terminal @relation(fields: [terminalId], references: [id])
+
+  @@map("prisma_forecasts")
+}
+
+model PriceHistory {
+  id         String   @id @default(uuid())
+  terminalId String   @map("terminal_id")
+  date       DateTime
+  price      Float
+  terminal   Terminal @relation(fields: [terminalId], references: [id])
+
+  @@map("prisma_price_history")
+}

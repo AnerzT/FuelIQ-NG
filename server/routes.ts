@@ -5,6 +5,7 @@ import { loginSchema, registerSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { seedDatabase } from "./seed";
+import { seedPrismaDatabase } from "./prisma-seed";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "fueliq-ng-secret-key";
 
@@ -32,6 +33,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await seedDatabase();
+  await seedPrismaDatabase();
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
