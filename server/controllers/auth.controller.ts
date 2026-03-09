@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { storage } from "../storage.js";
-import { loginSchema, registerSchema } from "@shared/schema";
+import { loginSchema, registerSchema } from "../../shared/schema.js";
 import { generateToken, type AuthRequest } from "../middleware/auth.js";
 
 const loginAttempts = new Map<string, { count: number; lastAttempt: number; lockedUntil: number }>();

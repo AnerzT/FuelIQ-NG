@@ -9,7 +9,7 @@ import {
   type InsertRefineryUpdate, type InsertRegulationUpdate, type InsertExternalPriceFeed, type InsertFxRate,
   type NotificationPrefs,
   type Depot, type DepotPrice, type Inventory, type Transaction, type TraderSignal, type HedgeRecommendation,
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
