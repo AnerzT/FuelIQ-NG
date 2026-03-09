@@ -1,18 +1,18 @@
 import type { Express } from "express";
 import { type Server } from "http";
-import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth";
-import { register, login, getMe, refreshToken } from "./controllers/auth.controller";
-import { getTerminals } from "./controllers/terminal.controller";
-import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast, getForecastHistory } from "./controllers/forecast.controller";
-import { getSignals, createSignal } from "./controllers/signal.controller";
-import { getPriceHistory } from "./controllers/price-history.controller";
+import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth.js";
+import { register, login, getMe, refreshToken } from "./controllers/auth.controller.js";
+import { getTerminals } from "./controllers/terminal.controller.js";
+import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast, getForecastHistory } from "./controllers/forecast.controller.js";
+import { getSignals, createSignal } from "./controllers/signal.controller.js";
+import { getPriceHistory } from "./controllers/price-history.controller.js";
 import {
   adminGetTerminals,
   adminToggleTerminal,
   adminCreateForecast,
   adminUpdateSignal,
   adminGetForecasts,
-} from "./controllers/admin.controller";
+} from "./controllers/admin.controller.js";
 import {
   getNnpcPrice,
   triggerNnpcSync,
