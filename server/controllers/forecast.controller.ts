@@ -1,7 +1,7 @@
 import type { Response } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 import { insertForecastSchema } from "@shared/schema";
-import type { AuthRequest } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth.js";
 import { computeForecast } from "../services/forecastEngine";
 import { computeForecastScore } from "../services/forecastScoring";
 import { onForecastCreated } from "../services/notificationOrchestrator";

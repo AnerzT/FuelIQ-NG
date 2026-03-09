@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 import { loginSchema, registerSchema } from "@shared/schema";
-import { generateToken, type AuthRequest } from "../middleware/auth";
+import { generateToken, type AuthRequest } from "../middleware/auth.js";
 
 const loginAttempts = new Map<string, { count: number; lastAttempt: number; lockedUntil: number }>();
 const LOCKOUT_THRESHOLD = 5;
