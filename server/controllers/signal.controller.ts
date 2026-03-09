@@ -1,7 +1,7 @@
 import type { Response } from "express";
-import { storage } from "../storage";
-import { insertMarketSignalSchema } from "@shared/schema";
-import type { AuthRequest } from "../middleware/auth";
+import { storage } from "../storage.js";
+import { insertMarketSignalSchema } from "../../shared/schema.js";
+import type { AuthRequest } from "../middleware/auth.js";
 
 export async function getSignals(req: AuthRequest, res: Response) {
   try {
