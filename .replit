@@ -44,4 +44,3 @@ waitForPort = 5000
 NODE_ENV = "development"
 
 [userenv.shared]
-GITHUB_TOKEN = "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"
