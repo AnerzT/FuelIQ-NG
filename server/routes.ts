@@ -24,7 +24,7 @@ import {
   triggerFxSignalUpdate,
   getMarketOverview,
   getFxHistory,
-} from "./controllers/integrations.controller";
+} from "./controllers/integrations.controller.js";
 import {
   getNotificationPrefs,
   updateNotificationPrefs,
@@ -32,14 +32,14 @@ import {
   getNotificationStatus,
   triggerMorningDigest,
   triggerTestNotification,
-} from "./controllers/notification.controller";
+} from "./controllers/notification.controller.js";
 import {
   getSubscriptionInfo,
   getTierInfo,
   updateSubscription,
   adminGetAllSubscriptions,
   adminUpdateSubscription,
-} from "./controllers/subscription.controller";
+} from "./controllers/subscription.controller.js";
 import {
   getDepots,
   getDepot,
@@ -47,29 +47,29 @@ import {
   getDepotPrices,
   createDepotPrice,
   updateDepotPrice,
-} from "./controllers/depot.controller";
+} from "./controllers/depot.controller.js";
 import {
   getInventory,
   getInventoryWithPnL,
   createInventory,
   createTransaction,
   getTransactions,
-} from "./controllers/inventory.controller";
+} from "./controllers/inventory.controller.js";
 import {
   getTraderSignals,
   submitTraderSignal,
-} from "./controllers/traderSignal.controller";
+} from "./controllers/traderSignal.controller.js";
 import {
   getHedgeRecommendations,
   generateHedgeRecommendations,
   getAdvancedAnalysis,
-} from "./controllers/hedge.controller";
-import { getRefineryUpdates, getRefineryStatus } from "./controllers/refinery.controller";
-import { getRegulations, getHighImpactRegulations } from "./controllers/regulation.controller";
-import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard";
-import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers, seedRefineryAndRegulationData } from "./seed";
-import { seedPrismaDatabase } from "./prisma-seed";
-import { storage } from "./storage";
+} from "./controllers/hedge.controller.js";
+import { getRefineryUpdates, getRefineryStatus } from "./controllers/refinery.controller.js";
+import { getRegulations, getHighImpactRegulations } from "./controllers/regulation.controller.js";
+import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard.js";
+import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers, seedRefineryAndRegulationData } from "./seed.js";
+import { seedPrismaDatabase } from "./prisma-seed.js";
+import { storage } from "./storage.js";
 
 export async function registerRoutes(
   httpServer: Server,

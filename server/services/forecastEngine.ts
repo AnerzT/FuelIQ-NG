@@ -1,4 +1,4 @@
-import type { MarketSignal, PriceHistoryEntry, ProductType } from "@shared/schema";
+import type { MarketSignal, PriceHistoryEntry, ProductType } from "../shared/schema.js";
 
 export interface ForecastResult {
   expectedMin: number;

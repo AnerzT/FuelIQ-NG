@@ -1,8 +1,8 @@
 import type { Response } from "express";
-import { storage } from "../storage";
-import type { AuthRequest } from "../middleware/auth";
+import { storage } from "../storage.js";
+import type { AuthRequest } from "../middleware/auth.js";
 import { PRODUCT_TYPES } from "../../shared/schema.js";
-import { computeAdvancedHedge, computeArbitrage } from "../services/hedgeEngine";
+import { computeAdvancedHedge, computeArbitrage } from "../services/hedgeEngine.js";
 
 export async function getHedgeRecommendations(req: AuthRequest, res: Response) {
   try {

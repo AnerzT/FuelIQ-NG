@@ -1,4 +1,4 @@
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 
 const VESSEL_API_KEY = process.env.VESSEL_API_KEY || "";
 const VESSEL_API_URL = process.env.VESSEL_API_URL || "https://services.marinetraffic.com/api/exportvessels/v:8";

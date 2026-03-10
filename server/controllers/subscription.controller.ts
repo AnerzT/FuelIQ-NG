@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import type { AuthRequest } from "../middleware/auth";
-import { storage } from "../storage";
+import type { AuthRequest } from "../middleware/auth.js";
+import { storage } from "../storage.js";
 import { TIER_LIMITS, updateSubscriptionSchema, type SubscriptionTier } from "../../shared/schema.js";
 
 export async function getSubscriptionInfo(req: AuthRequest, res: Response) {

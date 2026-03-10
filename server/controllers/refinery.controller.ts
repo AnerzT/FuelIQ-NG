@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import type { AuthRequest } from "../middleware/auth";
-import { storage } from "../storage";
+import type { AuthRequest } from "../middleware/auth.js";
+import { storage } from "../storage.js";
 
 export async function getRefineryUpdates(req: AuthRequest, res: Response) {
   try {

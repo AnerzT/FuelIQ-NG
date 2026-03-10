@@ -1,7 +1,7 @@
-import { storage } from "../storage";
-import * as smsService from "./smsService";
-import * as whatsappService from "./whatsappService";
-import type { Forecast } from "@shared/schema";
+import { storage } from "../storage.js";
+import * as smsService from "./smsService.js";
+import * as whatsappService from "./whatsappService.js";
+import type { Forecast } from "../shared/schema.js";
 
 export interface NotificationResult {
   alertType: string;

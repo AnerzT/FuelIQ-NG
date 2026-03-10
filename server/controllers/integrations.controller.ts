@@ -1,9 +1,9 @@
 import type { Response } from "express";
-import type { AuthRequest } from "../middleware/auth";
-import { syncNnpcPriceFeed, syncAndRecalculateForecasts, getLatestNnpcPrice } from "../services/nnpcService";
-import { trackAllTerminals, updateSignalsFromVesselData } from "../services/vesselTracking";
-import { syncFxRate, getFxVolatility, updateFxPressureSignals } from "../services/fxService";
-import { storage } from "../storage";
+import type { AuthRequest } from "../middleware/auth.js";
+import { syncNnpcPriceFeed, syncAndRecalculateForecasts, getLatestNnpcPrice } from "../services/nnpcService.js";
+import { trackAllTerminals, updateSignalsFromVesselData } from "../services/vesselTracking.js";
+import { syncFxRate, getFxVolatility, updateFxPressureSignals } from "../services/fxService.js";
+import { storage } from "../storage.js";
 
 export async function getNnpcPrice(_req: AuthRequest, res: Response) {
   try {

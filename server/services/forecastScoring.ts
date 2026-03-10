@@ -1,4 +1,4 @@
-import type { MarketSignal, PriceHistoryEntry, ExternalPriceFeed, FxRate, ProductType } from "@shared/schema";
+import type { MarketSignal, PriceHistoryEntry, ExternalPriceFeed, FxRate, ProductType } from "../shared/schema.js";
 
 export interface ScoringInput {
   signal: MarketSignal;

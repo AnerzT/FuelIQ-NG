@@ -1,5 +1,5 @@
-import { storage } from "../storage";
-import type { NotificationPrefs } from "@shared/schema";
+import { storage } from "../storage.js";
+import type { NotificationPrefs } from "../shared/schema.js";
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";

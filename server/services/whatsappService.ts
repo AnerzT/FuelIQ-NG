@@ -1,5 +1,5 @@
-import { storage } from "../storage";
-import type { NotificationPrefs } from "@shared/schema";
+import { storage } from "../storage.js";
+import type { NotificationPrefs } from "../shared/schema.js";
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID || "";

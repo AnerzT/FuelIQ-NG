@@ -1,5 +1,5 @@
-import { storage } from "../storage";
-import { computeForecastScore } from "./forecastScoring";
+import { storage } from "../storage.js";
+import { computeForecastScore } from "./forecastScoring.js";
 
 const NNPC_API_URL = process.env.NNPC_API_URL || "";
 

@@ -1,7 +1,7 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "./auth";
+import type { AuthRequest } from "./auth.js";
 import { TIER_LIMITS, type SubscriptionTier } from "@shared/schema";
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 
 const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, elite: 2 };
 

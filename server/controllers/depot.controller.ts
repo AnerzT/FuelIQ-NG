@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import { storage } from "../storage";
-import type { AuthRequest } from "../middleware/auth";
+import { storage } from "../storage.js";
+import type { AuthRequest } from "../middleware/auth.js";
 
 export async function getDepots(req: AuthRequest, res: Response) {
   try {

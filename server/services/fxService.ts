@@ -1,4 +1,4 @@
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 
 const FX_API_KEY = process.env.FX_API_KEY || "";
 const FX_API_URL = process.env.FX_API_URL || "https://api.exchangerate.host/latest";
