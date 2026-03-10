@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middleware/auth";
 import { storage } from "../storage";
-import { updateNotificationPrefsSchema } from "@shared/schema";
+import { updateNotificationPrefsSchema } from "../../shared/schema.js";
 import * as orchestrator from "../services/notificationOrchestrator";
 
 export async function getNotificationPrefs(req: AuthRequest, res: Response) {

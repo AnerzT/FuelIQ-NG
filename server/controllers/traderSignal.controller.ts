@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { storage } from "../storage";
 import type { AuthRequest } from "../middleware/auth";
-import { PRODUCT_TYPES } from "@shared/schema";
+import { PRODUCT_TYPES } from "../../shared/schema.js";
 
 const BULLISH_KEYWORDS = ["buy", "load", "scarcity", "shortage", "rising", "increase", "hike", "surge", "tight", "limited"];
 const BEARISH_KEYWORDS = ["sell", "drop", "excess", "surplus", "falling", "decrease", "glut", "oversupply", "dump", "cheap"];
