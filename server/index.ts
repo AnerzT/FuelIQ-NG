@@ -27,7 +27,7 @@ if (isProduction) {
   app.use(setupApiRateLimit);
 }
 
-registerRoutes(app);
+registerRoutes();
 serveStatic(app);
 
 app.use(notFoundHandler);
