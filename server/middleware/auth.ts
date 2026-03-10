@@ -6,7 +6,7 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET or SESSION_SECRET environment variable is required");
 }
 
-import type { SubscriptionTier } from "@shared/schema";
+import type { SubscriptionTier } from "../../shared/schema.js";
 
 export interface AuthRequest extends Request {
   userId?: string;

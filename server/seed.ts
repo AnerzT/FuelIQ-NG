@@ -1,5 +1,5 @@
 import { db } from "./storage.js";
-import { users, terminals, marketSignals, forecasts, priceHistory, depots, depotPrices, refineryUpdates, regulationUpdates } from "@shared/schema";
+import { users, terminals, marketSignals, forecasts, priceHistory, depots, depotPrices, refineryUpdates, regulationUpdates } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
