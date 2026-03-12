@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
   "dev": "vite",
-  "build": "vite build && mkdir -p server/public && cp -r dist/* server/public/",
+  "build": "vite build && (tsc --noEmit || true) && mkdir -p server/public && cp -r dist/* server/public/"
   "vercel-build": "npm run build",
   "start": "node dist/index.cjs",
   "typecheck": "tsc --noEmit"
