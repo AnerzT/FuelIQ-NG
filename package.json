@@ -9,7 +9,7 @@
   "vercel-build": "npm run build",
   "start": "node dist/index.cjs",
   "typecheck": "tsc --noEmit"
-}
+},
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
