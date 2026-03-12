@@ -10,9 +10,12 @@
   },
   "dependencies": {
     "vite": "latest",
+    "@vitejs/plugin-react": "latest",
     "typescript": "latest",
     "express": "^4.18.2",
     "@hookform/resolvers": "^3.10.0",
-    "tsx": "latest"
+    "tsx": "latest",
+    "react": "latest",
+    "react-dom": "latest"
   }
 }
