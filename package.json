@@ -4,12 +4,12 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "vite build && mkdir -p server/public && cp -r dist/* server/public/"
-    "start": "NODE_ENV=production node dist/index.cjs",
-    "check": "tsc",
-    "db:push": "drizzle-kit push"
-  },
+  "dev": "vite",
+  "build": "vite build && mkdir -p server/public && cp -r dist/* server/public/",
+  "vercel-build": "npm run build",
+  "start": "node dist/index.cjs",
+  "typecheck": "tsc --noEmit"
+}
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
