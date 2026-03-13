@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build",
-    "postbuild": "cp -r dist/static dist/public || true",
     "start": "node dist/index.js"
   },
   "dependencies": {
