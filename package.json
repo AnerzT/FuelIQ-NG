@@ -17,6 +17,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "drizzle-orm": "latest",
+    "drizzle-zod": "latest",
     "@vercel/postgres": "latest",
     "zod": "^3.22.0",
     "recharts": "^2.12.0",
