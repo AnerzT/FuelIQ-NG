@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
-import { insertForecastSchema } from "../../shared/schema".;
+import { insertForecastSchema } from "../../shared/schema";
 import type { AuthRequest } from "../middleware/auth.js";
 import { computeForecast } from "../services/forecastEngine.js";
 import { computeForecastScore } from "../services/forecastScoring.js";
