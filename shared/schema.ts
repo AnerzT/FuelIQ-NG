@@ -283,7 +283,7 @@ export type NotificationPrefs = {
   priceAlerts: boolean;
   refineryAlerts: boolean;
   morningDigest: boolean;
-  [key: string]: boolean;
+  [key: string]: any;
 };
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
