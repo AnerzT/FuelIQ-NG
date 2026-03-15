@@ -194,7 +194,7 @@ export async function migrateLegacyTiers() {
   const legacyUsers = await db.select().from(users).where(eq(users.subscriptionTier, "enterprise" as any));
   if (legacyUsers.length > 0) {
     for (const u of legacyUsers) {
-      await db.update(users).set({ subscriptionTier: "elite" }).where(eq(users.id, u.id));
+      await db.update(users).set({ subscriptionTier: "elite" } as any).where(eq(users.id, u.id));
     }
     console.log(`Migrated ${legacyUsers.length} users from 'enterprise' to 'elite' tier.`);
   }
@@ -214,4 +214,37 @@ export async function seedRefineryAndRegulationData() {
     { refineryName: "Kaduna Refinery", status: "shutdown", productionCapacity: 0, operationalStatus: "shutdown", pmsOutputEstimate: 0, dieselOutputEstimate: 0, jetOutputEstimate: 0 },
   ];
 
-  for (const r of refineryData)
+  for (const r of refineryData) {
+    await db.insert(refineryUpdates).values(r as any);
+  }
+
+  const regulationData = [
+    { title: "PPPRA Price Cap Adjustment", description: "The PPPRA has announced a revised price band for PMS, increasing the cap to ₦650/L effective March 15.", impactLevel: "high", effectiveDate: new Date("2026-03-15"), source: "PPPRA Gazette" },
+    { title: "New Depot Licensing Requirements", description: "NMDPRA introduces stricter licensing requirements for independent depot operators.", impactLevel: "medium", effectiveDate: new Date("2026-04-01"), source: "NMDPRA" },
+    { title: "VAT Exemption on JET A1 Extended", description: "Federal government extends VAT exemption on aviation fuel through Q2 2026.", impactLevel: "low", effectiveDate: new Date("2026-01-01"), source: "FIRS" },
+    { title: "FX Window for Petroleum Imports", description: "CBN establishes a dedicated FX window for petroleum product imports.", impactLevel: "high", effectiveDate: new Date("2026-03-10"), source: "CBN Circular" },
+    { title: "LPG Price Deregulation Phase 2", description: "Second phase of LPG market deregulation allows independent marketers to set prices.", impactLevel: "medium", effectiveDate: new Date("2026-03-20"), source: "NMDPRA" },
+  ];
+
+  for (const r of regulationData) {
+    await db.insert(regulationUpdates).values(r as any);
+  }
+
+  console.log("Refinery updates and regulation data seeded successfully.");
+}
+
+export async function seedAdminUser() {
+  const existingAdmin = await db.select().from(users).where(eq(users.email, "admin@fueliq.ng"));
+  if (existingAdmin.length === 0) {
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    await db.insert(users).values({
+      username: "admin",
+      name: "Admin",
+      email: "admin@fueliq.ng",
+      password: hashedPassword,
+      role: "admin",
+      subscriptionTier: "enterprise",
+    } as any);
+    console.log("Admin user seeded.");
+  }
+}
