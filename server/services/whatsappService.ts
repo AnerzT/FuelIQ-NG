@@ -1,5 +1,5 @@
 import { storage } from "../storage.js";
-import type { NotificationPrefs } from "../shared/schema.js";
+import type { NotificationPrefs } from "../../shared/schema.js";
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID || "";
@@ -162,22 +162,22 @@ export async function sendMorningDigest(
   return broadcastWhatsApp("morningDigest", message);
 }
 
-async function broadcastWhatsApp(alertType: keyof NotificationPrefs, message: string): Promise<number> {
-  const users = await storage.getSubscribedUsers("whatsapp", alertType);
+async function broadcastWhatsApp(alertType: string, message: string): Promise<number> {
+  const users = await storage.getSubscribedUsers("whatsapp", alertType as keyof NotificationPrefs);
   let sent = 0;
 
   for (const user of users) {
-    if (!user.whatsappPhone) continue;
+    const userWhatsapp = (user as any).whatsappPhone;
+    if (!userWhatsapp) continue;
 
-    const result = await sendWhatsAppMessage(user.whatsappPhone, message);
+    const result = await sendWhatsAppMessage(userWhatsapp, message);
     await storage.createNotificationLog({
       userId: user.id,
       channel: "whatsapp",
-      alertType,
+      alertType: String(alertType),
       message,
       status: result.success ? "sent" : "failed",
-      externalId: result.messageId || null,
-    });
+    } as any);
 
     if (result.success) sent++;
   }
