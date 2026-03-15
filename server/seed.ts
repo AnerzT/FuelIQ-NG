@@ -46,16 +46,34 @@ export async function seedDatabase() {
   console.log("Seeding database...");
 
   for (const t of TERMINAL_SEEDS) {
-    const [terminal] = await db.insert(terminals).values({ name: t.name, state: t.state, code: t.code, active: true }).returning();
+    const [terminal] = await db.insert(terminals).values({
+      name: t.name,
+      state: t.state,
+      code: t.code,
+      location: t.state,
+      active: true,
+      isActive: true,
+    }).returning();
 
     const signalPreset = SIGNAL_PRESETS[t.code];
     if (signalPreset) {
-      await db.insert(marketSignals).values({ terminalId: terminal.id, ...signalPreset });
+      await db.insert(marketSignals).values({
+        terminalId: String(terminal.id),
+        ...signalPreset,
+      });
     }
 
     const forecastPreset = FORECAST_PRESETS[t.code];
     if (forecastPreset) {
-      await db.insert(forecasts).values({ terminalId: terminal.id, ...forecastPreset });
+      await db.insert(forecasts).values({
+        terminalId: String(terminal.id),
+        productType: "PMS",
+        depotPrice: 0,
+        refineryInfluenceScore: 0,
+        importParityPrice: 0,
+        demandIndex: 0,
+        ...forecastPreset,
+      });
     }
 
     const basePrice = forecastPreset?.expectedMin || 620;
@@ -65,7 +83,13 @@ export async function seedDatabase() {
       date.setDate(date.getDate() - i);
       const variation = (Math.random() - 0.5) * 30;
       const price = Math.round(basePrice + variation);
-      await db.insert(priceHistory).values({ terminalId: terminal.id, date, price });
+      await db.insert(priceHistory).values({
+        terminalId: String(terminal.id),
+        productType: "PMS",
+        price,
+        date,
+        recordedAt: date,
+      });
     }
   }
 
@@ -75,11 +99,13 @@ export async function seedDatabase() {
   if (existingAdmin.length === 0) {
     const hashedPassword = await bcrypt.hash("admin123", 10);
     await db.insert(users).values({
+      username: "admin",
       name: "Admin",
       email: "admin@fueliq.ng",
       password: hashedPassword,
       role: "admin",
-    });
+      subscriptionTier: "enterprise",
+    } as any);
     console.log("Admin user seeded.");
   }
 
@@ -138,19 +164,22 @@ async function seedDepotsAndPrices() {
     for (const d of depotList) {
       const [depot] = await db.insert(depots).values({
         name: d.name,
-        terminalId,
+        location: "Nigeria",
+        terminalId: String(terminalId),
         owner: d.owner,
         active: true,
+        isActive: true,
       }).returning();
 
       for (const [productType, basePrice] of Object.entries(PRODUCT_BASE_PRICES)) {
         const variation = (Math.random() - 0.5) * 40;
         const price = Math.round(basePrice + variation);
         await db.insert(depotPrices).values({
-          depotId: depot.id,
+          depotId: String(depot.id),
           productType,
           price,
           updatedAt: new Date(),
+          recordedAt: new Date(),
         });
       }
     }
@@ -179,10 +208,10 @@ export async function seedRefineryAndRegulationData() {
   }
 
   const refineryData = [
-    { refineryName: "Dangote Refinery", productionCapacity: 85, operationalStatus: "operational", pmsOutputEstimate: 320, dieselOutputEstimate: 180, jetOutputEstimate: 45, updateSource: "NNPC" },
-    { refineryName: "Port Harcourt Refinery", productionCapacity: 40, operationalStatus: "maintenance", pmsOutputEstimate: 60, dieselOutputEstimate: 35, jetOutputEstimate: 10, updateSource: "NNPC" },
-    { refineryName: "Warri Refinery", productionCapacity: 55, operationalStatus: "operational", pmsOutputEstimate: 80, dieselOutputEstimate: 45, jetOutputEstimate: 15, updateSource: "NNPC" },
-    { refineryName: "Kaduna Refinery", productionCapacity: 0, operationalStatus: "shutdown", pmsOutputEstimate: 0, dieselOutputEstimate: 0, jetOutputEstimate: 0, updateSource: "NNPC" },
+    { refineryName: "Dangote Refinery", status: "operational", productionCapacity: 85, operationalStatus: "operational", pmsOutputEstimate: 320, dieselOutputEstimate: 180, jetOutputEstimate: 45 },
+    { refineryName: "Port Harcourt Refinery", status: "maintenance", productionCapacity: 40, operationalStatus: "maintenance", pmsOutputEstimate: 60, dieselOutputEstimate: 35, jetOutputEstimate: 10 },
+    { refineryName: "Warri Refinery", status: "operational", productionCapacity: 55, operationalStatus: "operational", pmsOutputEstimate: 80, dieselOutputEstimate: 45, jetOutputEstimate: 15 },
+    { refineryName: "Kaduna Refinery", status: "shutdown", productionCapacity: 0, operationalStatus: "shutdown", pmsOutputEstimate: 0, dieselOutputEstimate: 0, jetOutputEstimate: 0 },
   ];
 
   for (const r of refineryData) {
@@ -190,11 +219,11 @@ export async function seedRefineryAndRegulationData() {
   }
 
   const regulationData = [
-    { title: "PPPRA Price Cap Adjustment", summary: "The PPPRA has announced a revised price band for PMS, increasing the cap to ₦650/L effective March 15. This reflects rising crude oil costs and FX pressures.", impactLevel: "high", effectiveDate: new Date("2026-03-15"), source: "PPPRA Gazette" },
-    { title: "New Depot Licensing Requirements", summary: "NMDPRA introduces stricter licensing requirements for independent depot operators, including environmental compliance and storage capacity thresholds.", impactLevel: "medium", effectiveDate: new Date("2026-04-01"), source: "NMDPRA" },
-    { title: "VAT Exemption on JET A1 Extended", summary: "Federal government extends VAT exemption on aviation fuel (JET A1) through Q2 2026 to support the aviation sector recovery.", impactLevel: "low", effectiveDate: new Date("2026-01-01"), source: "FIRS" },
-    { title: "FX Window for Petroleum Imports", summary: "CBN establishes a dedicated FX window for petroleum product imports to stabilize pump prices. Eligible importers can access USD at official rates.", impactLevel: "high", effectiveDate: new Date("2026-03-10"), source: "CBN Circular" },
-    { title: "LPG Price Deregulation Phase 2", summary: "Second phase of LPG market deregulation allows independent marketers to set prices based on market forces. Expected to increase competition.", impactLevel: "medium", effectiveDate: new Date("2026-03-20"), source: "NMDPRA" },
+    { title: "PPPRA Price Cap Adjustment", description: "The PPPRA has announced a revised price band for PMS, increasing the cap to ₦650/L effective March 15.", impactLevel: "high", effectiveDate: new Date("2026-03-15"), source: "PPPRA Gazette" },
+    { title: "New Depot Licensing Requirements", description: "NMDPRA introduces stricter licensing requirements for independent depot operators.", impactLevel: "medium", effectiveDate: new Date("2026-04-01"), source: "NMDPRA" },
+    { title: "VAT Exemption on JET A1 Extended", description: "Federal government extends VAT exemption on aviation fuel through Q2 2026.", impactLevel: "low", effectiveDate: new Date("2026-01-01"), source: "FIRS" },
+    { title: "FX Window for Petroleum Imports", description: "CBN establishes a dedicated FX window for petroleum product imports.", impactLevel: "high", effectiveDate: new Date("2026-03-10"), source: "CBN Circular" },
+    { title: "LPG Price Deregulation Phase 2", description: "Second phase of LPG market deregulation allows independent marketers to set prices.", impactLevel: "medium", effectiveDate: new Date("2026-03-20"), source: "NMDPRA" },
   ];
 
   for (const r of regulationData) {
@@ -209,11 +238,13 @@ export async function seedAdminUser() {
   if (existingAdmin.length === 0) {
     const hashedPassword = await bcrypt.hash("admin123", 10);
     await db.insert(users).values({
+      username: "admin",
       name: "Admin",
       email: "admin@fueliq.ng",
       password: hashedPassword,
       role: "admin",
-    });
+      subscriptionTier: "enterprise",
+    } as any);
     console.log("Admin user seeded.");
   }
 }
