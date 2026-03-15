@@ -56,7 +56,7 @@ export async function updateSubscription(req: AuthRequest, res: Response) {
     const targetUserId = req.body.userId || req.userId!;
 
     const updated = await storage.updateUserSubscription(targetUserId, {
-      tier: parsed.data.tier,
+      tier: parsed.data.subscriptionTier || parsed.data.tier,
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : new Date(),
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       assignedTerminalId: parsed.data.assignedTerminalId,
@@ -66,7 +66,7 @@ export async function updateSubscription(req: AuthRequest, res: Response) {
 
     return res.json({
       success: true,
-      message: `Subscription updated to ${parsed.data.tier}`,
+      message: `Subscription updated to ${parsed.data.subscriptionTier || parsed.data.tier}`,
       data: {
         tier: updated.subscriptionTier,
         subscriptionStartDate: updated.subscriptionStartDate,
@@ -83,7 +83,7 @@ export async function adminGetAllSubscriptions(req: AuthRequest, res: Response) 
     const allUsers = await storage.getAllUsers();
     const subscriptions = allUsers.map((u) => ({
       id: u.id,
-      name: u.name,
+      name: (u as any).name ?? u.username,
       email: u.email,
       role: u.role,
       tier: u.subscriptionTier,
@@ -109,7 +109,7 @@ export async function adminUpdateSubscription(req: AuthRequest, res: Response) {
     }
 
     const updated = await storage.updateUserSubscription(userId, {
-      tier: parsed.data.tier,
+      tier: parsed.data.subscriptionTier || parsed.data.tier,
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : new Date(),
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       assignedTerminalId: parsed.data.assignedTerminalId,
@@ -119,10 +119,10 @@ export async function adminUpdateSubscription(req: AuthRequest, res: Response) {
 
     return res.json({
       success: true,
-      message: `User subscription updated to ${parsed.data.tier}`,
+      message: `User subscription updated to ${parsed.data.subscriptionTier || parsed.data.tier}`,
       data: {
         id: updated.id,
-        name: updated.name,
+        name: (updated as any).name ?? updated.username,
         email: updated.email,
         tier: updated.subscriptionTier,
         subscriptionStartDate: updated.subscriptionStartDate,
