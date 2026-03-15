@@ -1,4 +1,4 @@
-import type { MarketSignal, PriceHistoryEntry, ProductType } from "../shared/schema.js";
+import type { MarketSignal, PriceHistoryEntry, ProductType } from "../../shared/schema.js";
 
 export interface ForecastResult {
   expectedMin: number;
@@ -31,7 +31,7 @@ interface ProductProfile {
   refineryInfluenceScore: number;
 }
 
-const PRODUCT_PROFILES: Record<ProductType, ProductProfile> = {
+const PRODUCT_PROFILES: Record<string, ProductProfile> = {
   PMS: {
     baseMin: 610,
     baseMax: 625,
@@ -115,11 +115,12 @@ const PRODUCT_PROFILES: Record<ProductType, ProductProfile> = {
 };
 
 function getProductProfile(productType?: string): ProductProfile {
-  const key = (productType || "PMS") as ProductType;
+  const key = (productType || "PMS");
   return PRODUCT_PROFILES[key] || PRODUCT_PROFILES.PMS;
 }
 
-function normalizeLevel(value: string): string {
+function normalizeLevel(value: string | null | undefined): string {
+  if (!value) return "";
   const v = value.trim();
   return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
 }
@@ -175,7 +176,7 @@ function getBasePrice(recentHistory: PriceHistoryEntry[], productType?: string):
   }
 
   const sorted = [...recentHistory].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => new Date((b as any).date ?? b.recordedAt).getTime() - new Date((a as any).date ?? a.recordedAt).getTime()
   );
 
   const recent = sorted.slice(0, Math.min(7, sorted.length));
@@ -193,9 +194,9 @@ function getBasePrice(recentHistory: PriceHistoryEntry[], productType?: string):
 
 function generateAction(bias: "bullish" | "bearish" | "neutral", signals: SignalLevels, productType?: string): string {
   const actions: string[] = [];
-  const pt = (productType || "PMS") as ProductType;
+  const pt = (productType || "PMS");
 
-  const productLabels: Record<ProductType, string> = {
+  const productLabels: Record<string, string> = {
     PMS: "PMS",
     AGO: "Diesel (AGO)",
     JET_A1: "Jet A-1",
@@ -269,15 +270,15 @@ export function computeForecast(
   recentHistory: PriceHistoryEntry[],
   productType?: string
 ): ForecastResult {
-  const pt = productType || signal.productType || "PMS";
+  const pt = productType || (signal as any).productType || "PMS";
   const profile = getProductProfile(pt);
 
   const signals: SignalLevels = {
-    vesselActivity: signal.vesselActivity,
-    truckQueue: signal.truckQueue,
-    nnpcSupply: signal.nnpcSupply,
-    fxPressure: signal.fxPressure,
-    policyRisk: signal.policyRisk,
+    vesselActivity: (signal as any).vesselActivity || "",
+    truckQueue: (signal as any).truckQueue || "",
+    nnpcSupply: (signal as any).nnpcSupply || "",
+    fxPressure: (signal as any).fxPressure || "",
+    policyRisk: (signal as any).policyRisk || "",
   };
 
   const bullishScore = computeBullishScore(signals, pt);
@@ -316,7 +317,6 @@ export function computeForecast(
   }
 
   const suggestedAction = generateAction(bias, signals, pt);
-
   const demandIndex = profile.demandIndex + (bias === "bullish" ? 0.05 : bias === "bearish" ? -0.05 : 0);
 
   return {
