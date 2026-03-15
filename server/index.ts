@@ -25,10 +25,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(securityHeaders);
 
 if (isProduction) {
-  setupCompression(app);
-  setupCors(app);
-  setupHelmet(app);
-  app.use(setupApiRateLimit);
+  app.use(setupCompression());
+  app.use(setupCors());
+  app.use(setupHelmet());
+  app.use(setupApiRateLimit());
 }
 
 registerRoutes(app);
@@ -41,8 +41,8 @@ export default app;
 
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 5000;
-  httpServer.listen(PORT, () => {
+  httpServer.listen(Number(PORT), () => {
     console.log(`Server running on port ${PORT}`);
   });
 }
-//Deployment Trigger V4
+//Deployment Trigger V7
