@@ -276,14 +276,13 @@ export const TIER_LIMITS = {
 export const PRODUCT_TYPES = ["PMS", "AGO", "DPK", "LPG"] as const;
 export type ProductType = typeof PRODUCT_TYPES[number];
 
-export type NotificationPrefs = {
-  smsEnabled: boolean;
-  whatsappEnabled: boolean;
-  forecastAlerts: boolean;
-  priceAlerts: boolean;
-  refineryAlerts: boolean;
-  morningDigest: boolean;
-  [key: string]: any;
+export type NotificationPrefs = Record<string, any> & {
+  smsEnabled?: boolean;
+  whatsappEnabled?: boolean;
+  forecastAlerts?: boolean;
+  priceAlerts?: boolean;
+  refineryAlerts?: boolean;
+  morningDigest?: boolean;
 };
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
