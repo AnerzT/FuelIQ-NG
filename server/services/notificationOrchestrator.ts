@@ -1,7 +1,7 @@
 import { storage } from "../storage.js";
 import * as smsService from "./smsService.js";
 import * as whatsappService from "./whatsappService.js";
-import type { Forecast } from "../shared/schema.js";
+import type { Forecast } from "../../shared/schema.js";
 
 export interface NotificationResult {
   alertType: string;
@@ -98,7 +98,7 @@ export async function sendMorningDigest(): Promise<NotificationResult> {
   const summaries: { terminal: string; bias: string; range: string; confidence: number }[] = [];
 
   for (const terminal of activeTerminals) {
-    const forecast = await storage.getLatestForecast(terminal.id);
+    const forecast = await storage.getLatestForecast(String(terminal.id));
     if (!forecast) continue;
 
     summaries.push({
@@ -122,16 +122,16 @@ export async function sendMorningDigest(): Promise<NotificationResult> {
   const smsUsers = await storage.getSubscribedUsers("sms", "morningDigest");
   let smsSent = 0;
   for (const user of smsUsers) {
-    if (!user.phone) continue;
-    const result = await smsService.sendSms(user.phone, smsMessage);
+    const userPhone = (user as any).phone;
+    if (!userPhone) continue;
+    const result = await smsService.sendSms(userPhone, smsMessage);
     await storage.createNotificationLog({
       userId: user.id,
       channel: "sms",
       alertType: "morningDigest",
       message: smsMessage,
       status: result.success ? "sent" : "failed",
-      externalId: result.messageId || null,
-    });
+    } as any);
     if (result.success) smsSent++;
   }
 
