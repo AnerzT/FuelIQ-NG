@@ -1,6 +1,5 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
-import { insertForecastSchema, insertMarketSignalSchema } from "../../shared/schema.js";
 import type { AuthRequest } from "../middleware/auth.js";
 
 export async function adminGetTerminals(req: AuthRequest, res: Response) {
@@ -35,20 +34,31 @@ export async function adminToggleTerminal(req: AuthRequest, res: Response) {
 
 export async function adminCreateForecast(req: AuthRequest, res: Response) {
   try {
-    const parsed = insertForecastSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || "Invalid input",
-      });
+    const { terminalId, productType, expectedMin, expectedMax, bias, confidence, suggestedAction } = req.body;
+
+    if (!terminalId) {
+      return res.status(400).json({ success: false, message: "terminalId is required" });
     }
 
-    const terminal = await storage.getTerminal(parsed.data.terminalId);
+    const terminal = await storage.getTerminal(String(terminalId));
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    const forecast = await storage.createForecast(parsed.data);
+    const forecast = await storage.createForecast({
+      terminalId: String(terminalId),
+      productType: productType || "PMS",
+      expectedMin: Number(expectedMin),
+      expectedMax: Number(expectedMax),
+      bias: bias || "neutral",
+      confidence: Number(confidence) || 70,
+      suggestedAction: suggestedAction || "",
+      depotPrice: 0,
+      refineryInfluenceScore: 0,
+      importParityPrice: 0,
+      demandIndex: 0,
+    } as any);
+
     return res.status(201).json({
       success: true,
       message: "Forecast created successfully",
@@ -61,20 +71,30 @@ export async function adminCreateForecast(req: AuthRequest, res: Response) {
 
 export async function adminUpdateSignal(req: AuthRequest, res: Response) {
   try {
-    const parsed = insertMarketSignalSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || "Invalid input",
-      });
+    const { terminalId, productType, vesselActivity, truckQueue, nnpcSupply, fxPressure, policyRisk, signalType, value, description } = req.body;
+
+    if (!terminalId) {
+      return res.status(400).json({ success: false, message: "terminalId is required" });
     }
 
-    const terminal = await storage.getTerminal(parsed.data.terminalId);
+    const terminal = await storage.getTerminal(String(terminalId));
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    const signal = await storage.createSignal(parsed.data);
+    const signal = await storage.createSignal({
+      terminalId: String(terminalId),
+      productType: productType || "PMS",
+      vesselActivity: vesselActivity || null,
+      truckQueue: truckQueue || null,
+      nnpcSupply: nnpcSupply || null,
+      fxPressure: fxPressure || null,
+      policyRisk: policyRisk || null,
+      signalType: signalType || null,
+      value: value ? Number(value) : null,
+      description: description || null,
+    } as any);
+
     return res.status(201).json({
       success: true,
       message: "Market signal updated successfully",
