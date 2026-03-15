@@ -53,14 +53,14 @@ export async function seedDatabase() {
       location: t.state,
       active: true,
       isActive: true,
-    }).returning();
+    } as any).returning();
 
     const signalPreset = SIGNAL_PRESETS[t.code];
     if (signalPreset) {
       await db.insert(marketSignals).values({
         terminalId: String(terminal.id),
         ...signalPreset,
-      });
+      } as any);
     }
 
     const forecastPreset = FORECAST_PRESETS[t.code];
@@ -73,7 +73,7 @@ export async function seedDatabase() {
         importParityPrice: 0,
         demandIndex: 0,
         ...forecastPreset,
-      });
+      } as any);
     }
 
     const basePrice = forecastPreset?.expectedMin || 620;
@@ -89,7 +89,7 @@ export async function seedDatabase() {
         price,
         date,
         recordedAt: date,
-      });
+      } as any);
     }
   }
 
@@ -169,7 +169,7 @@ async function seedDepotsAndPrices() {
         owner: d.owner,
         active: true,
         isActive: true,
-      }).returning();
+      } as any).returning();
 
       for (const [productType, basePrice] of Object.entries(PRODUCT_BASE_PRICES)) {
         const variation = (Math.random() - 0.5) * 40;
@@ -180,7 +180,7 @@ async function seedDepotsAndPrices() {
           price,
           updatedAt: new Date(),
           recordedAt: new Date(),
-        });
+        } as any);
       }
     }
   }
@@ -214,37 +214,4 @@ export async function seedRefineryAndRegulationData() {
     { refineryName: "Kaduna Refinery", status: "shutdown", productionCapacity: 0, operationalStatus: "shutdown", pmsOutputEstimate: 0, dieselOutputEstimate: 0, jetOutputEstimate: 0 },
   ];
 
-  for (const r of refineryData) {
-    await db.insert(refineryUpdates).values(r);
-  }
-
-  const regulationData = [
-    { title: "PPPRA Price Cap Adjustment", description: "The PPPRA has announced a revised price band for PMS, increasing the cap to ₦650/L effective March 15.", impactLevel: "high", effectiveDate: new Date("2026-03-15"), source: "PPPRA Gazette" },
-    { title: "New Depot Licensing Requirements", description: "NMDPRA introduces stricter licensing requirements for independent depot operators.", impactLevel: "medium", effectiveDate: new Date("2026-04-01"), source: "NMDPRA" },
-    { title: "VAT Exemption on JET A1 Extended", description: "Federal government extends VAT exemption on aviation fuel through Q2 2026.", impactLevel: "low", effectiveDate: new Date("2026-01-01"), source: "FIRS" },
-    { title: "FX Window for Petroleum Imports", description: "CBN establishes a dedicated FX window for petroleum product imports.", impactLevel: "high", effectiveDate: new Date("2026-03-10"), source: "CBN Circular" },
-    { title: "LPG Price Deregulation Phase 2", description: "Second phase of LPG market deregulation allows independent marketers to set prices.", impactLevel: "medium", effectiveDate: new Date("2026-03-20"), source: "NMDPRA" },
-  ];
-
-  for (const r of regulationData) {
-    await db.insert(regulationUpdates).values(r);
-  }
-
-  console.log("Refinery updates and regulation data seeded successfully.");
-}
-
-export async function seedAdminUser() {
-  const existingAdmin = await db.select().from(users).where(eq(users.email, "admin@fueliq.ng"));
-  if (existingAdmin.length === 0) {
-    const hashedPassword = await bcrypt.hash("admin123", 10);
-    await db.insert(users).values({
-      username: "admin",
-      name: "Admin",
-      email: "admin@fueliq.ng",
-      password: hashedPassword,
-      role: "admin",
-      subscriptionTier: "enterprise",
-    } as any);
-    console.log("Admin user seeded.");
-  }
-}
+  for (const r of refineryData)
