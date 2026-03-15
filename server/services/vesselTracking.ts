@@ -146,7 +146,9 @@ export async function trackAllTerminals(): Promise<VesselTrackingResult[]> {
   const results: VesselTrackingResult[] = [];
 
   for (const terminal of activeTerminals) {
-    const result = await trackVesselsForTerminal(terminal.code, terminal.id);
+    const terminalCode = (terminal as any).code ?? terminal.name;
+    const terminalId = String(terminal.id);
+    const result = await trackVesselsForTerminal(terminalCode, terminalId);
     results.push(result);
   }
 
@@ -163,12 +165,16 @@ export async function updateSignalsFromVesselData(): Promise<number> {
 
       await storage.createSignal({
         terminalId: result.terminalId,
+        productType: "PMS",
         vesselActivity: result.activityLevel,
-        truckQueue: existingSignal?.truckQueue ?? "Medium",
+        truckQueue: (existingSignal as any)?.truckQueue ?? "Medium",
         nnpcSupply: result.supplyPressure === "strong" ? "Strong" : result.supplyPressure === "moderate" ? "Moderate" : "Weak",
-        fxPressure: existingSignal?.fxPressure ?? "Medium",
-        policyRisk: existingSignal?.policyRisk ?? "Low",
-      });
+        fxPressure: (existingSignal as any)?.fxPressure ?? "Medium",
+        policyRisk: (existingSignal as any)?.policyRisk ?? "Low",
+        signalType: null,
+        value: null,
+        description: null,
+      } as any);
 
       updated++;
     } catch (err: any) {
