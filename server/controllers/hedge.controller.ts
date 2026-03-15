@@ -29,9 +29,9 @@ export async function generateHedgeRecommendations(req: AuthRequest, res: Respon
 
     for (const pt of productsToAnalyze) {
       const inventoryItems = await storage.getInventory(userId, terminalId, pt);
-      const totalVolume = inventoryItems.reduce((sum, i) => sum + i.volumeLitres, 0);
+      const totalVolume = inventoryItems.reduce((sum, i) => sum + (Number((i as any).volumeLitres ?? (i as any).quantityLitres ?? 0)), 0);
       const weightedAvgCost = totalVolume > 0
-        ? inventoryItems.reduce((sum, i) => sum + i.averageCost * i.volumeLitres, 0) / totalVolume
+        ? inventoryItems.reduce((sum, i) => sum + Number((i as any).averageCost ?? 0) * Number((i as any).volumeLitres ?? (i as any).quantityLitres ?? 0), 0) / totalVolume
         : 0;
 
       let forecast = null;
@@ -72,7 +72,7 @@ export async function generateHedgeRecommendations(req: AuthRequest, res: Respon
         averageCost: weightedAvgCost,
         currentPrice,
         forecastBias: bias,
-        forecastConfidence: confidence,
+        forecastConfidence: Number(confidence),
         dropProbability,
         historicalVolatility,
         demandIndex,
@@ -85,59 +85,49 @@ export async function generateHedgeRecommendations(req: AuthRequest, res: Respon
 
       if (advanced.inventoryRisk.riskLevel !== "low" && totalVolume > 0) {
         const rec = await storage.createHedgeRecommendation({
-          userId,
+          userId: Number(userId),
           productType: pt,
-          strategyType: "Inventory Risk Alert",
-          reasoning: advanced.inventoryRisk.reasoning,
-          riskLevel: advanced.inventoryRisk.riskLevel,
-          expectedMarginImpact: Math.round((advanced.inventoryRisk.unrealizedPnL / Math.max(totalVolume * weightedAvgCost, 1)) * 100 * 100) / 100,
-        });
+          strategy: "Inventory Risk Alert",
+          rationale: advanced.inventoryRisk.reasoning,
+        } as any);
         allRecommendations.push(rec);
       }
 
-      if (bias === "bullish" && confidence >= 60) {
+      if (bias === "bullish" && Number(confidence) >= 60) {
         const rec = await storage.createHedgeRecommendation({
-          userId,
+          userId: Number(userId),
           productType: pt,
-          strategyType: "Forward Buying",
-          reasoning: `${pt} prices likely to rise (${confidence}% confidence). ${advanced.staggeredBuy.reasoning}`,
-          riskLevel: confidence >= 75 ? "low" : "medium",
-          expectedMarginImpact: Math.round((currentPrice - weightedAvgCost) / Math.max(weightedAvgCost, 1) * 100 * 100) / 100,
-        });
+          strategy: "Forward Buying",
+          rationale: `${pt} prices likely to rise (${confidence}% confidence). ${advanced.staggeredBuy.reasoning}`,
+        } as any);
         allRecommendations.push(rec);
       }
 
       const rec2 = await storage.createHedgeRecommendation({
-        userId,
+        userId: Number(userId),
         productType: pt,
-        strategyType: "Staggered Purchase",
-        reasoning: advanced.staggeredBuy.reasoning,
-        riskLevel: advanced.staggeredBuy.volatilityIndex > 0.6 ? "medium" : "low",
-        expectedMarginImpact: Math.round(advanced.staggeredBuy.volatilityIndex * 2 * 100) / 100,
-      });
+        strategy: "Staggered Purchase",
+        rationale: advanced.staggeredBuy.reasoning,
+      } as any);
       allRecommendations.push(rec2);
 
       if (advanced.arbitrage?.hasOpportunity) {
         const rec3 = await storage.createHedgeRecommendation({
-          userId,
+          userId: Number(userId),
           productType: pt,
-          strategyType: "Depot Arbitrage",
-          reasoning: advanced.arbitrage.reasoning,
-          riskLevel: advanced.arbitrage.profitMarginPercent > 1 ? "low" : "medium",
-          expectedMarginImpact: advanced.arbitrage.profitMarginPercent,
-        });
+          strategy: "Depot Arbitrage",
+          rationale: advanced.arbitrage.reasoning,
+        } as any);
         allRecommendations.push(rec3);
       }
 
       if (totalVolume > 0 && currentPrice > weightedAvgCost) {
         const rec4 = await storage.createHedgeRecommendation({
-          userId,
+          userId: Number(userId),
           productType: pt,
-          strategyType: "Margin Protection",
-          reasoning: `Current ${pt} price (₦${currentPrice.toFixed(0)}) is above avg cost (₦${weightedAvgCost.toFixed(0)}). Consider selling a portion of ${totalVolume.toLocaleString()}L to lock in ₦${(currentPrice - weightedAvgCost).toFixed(0)}/L profit.`,
-          riskLevel: "low",
-          expectedMarginImpact: Math.round((currentPrice - weightedAvgCost) / Math.max(weightedAvgCost, 1) * 100 * 100) / 100,
-        });
+          strategy: "Margin Protection",
+          rationale: `Current ${pt} price (₦${currentPrice.toFixed(0)}) is above avg cost (₦${weightedAvgCost.toFixed(0)}). Consider selling a portion of ${totalVolume.toLocaleString()}L to lock in ₦${(currentPrice - weightedAvgCost).toFixed(0)}/L profit.`,
+        } as any);
         allRecommendations.push(rec4);
       }
     }
@@ -159,9 +149,9 @@ export async function getAdvancedAnalysis(req: AuthRequest, res: Response) {
     const terminalId = req.query.terminalId as string | undefined;
 
     const inventoryItems = await storage.getInventory(userId, terminalId, productType);
-    const totalVolume = inventoryItems.reduce((sum, i) => sum + i.volumeLitres, 0);
+    const totalVolume = inventoryItems.reduce((sum, i) => sum + Number((i as any).volumeLitres ?? (i as any).quantityLitres ?? 0), 0);
     const weightedAvgCost = totalVolume > 0
-      ? inventoryItems.reduce((sum, i) => sum + i.averageCost * i.volumeLitres, 0) / totalVolume
+      ? inventoryItems.reduce((sum, i) => sum + Number((i as any).averageCost ?? 0) * Number((i as any).volumeLitres ?? (i as any).quantityLitres ?? 0), 0) / totalVolume
       : 0;
 
     let forecast = null;
@@ -199,7 +189,7 @@ export async function getAdvancedAnalysis(req: AuthRequest, res: Response) {
       averageCost: weightedAvgCost,
       currentPrice,
       forecastBias: bias,
-      forecastConfidence: confidence,
+      forecastConfidence: Number(confidence),
       dropProbability,
       historicalVolatility,
       demandIndex,
