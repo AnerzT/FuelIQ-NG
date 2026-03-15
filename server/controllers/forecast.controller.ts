@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
-import { insertForecastSchema } from "../../shared/schema";
+import { insertForecastSchema } from "../../shared/schema.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { computeForecast } from "../services/forecastEngine.js";
 import { computeForecastScore } from "../services/forecastScoring.js";
@@ -66,15 +66,19 @@ export async function createForecast(req: AuthRequest, res: Response) {
       });
     }
 
-    const terminal = await storage.getTerminal(parsed.data.terminalId);
+    const { terminalId, productType } = parsed.data as any;
+
+    const terminal = await storage.getTerminal(terminalId);
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
     const forecastData = {
       ...parsed.data,
-      productType: parsed.data.productType || "PMS",
+      terminalId: String(terminalId),
+      productType: productType || "PMS",
     };
+
     const forecast = await storage.createForecast(forecastData as any);
 
     return res.status(201).json({
@@ -106,10 +110,14 @@ export async function generateForecast(req: AuthRequest, res: Response) {
     const result = computeForecast(signal, history, productType);
 
     const forecast = await storage.createForecast({
-      terminalId,
+      terminalId: String(terminalId),
       productType,
+      depotPrice: 0,
+      refineryInfluenceScore: 0,
+      importParityPrice: 0,
+      demandIndex: 0,
       ...result,
-    });
+    } as any);
 
     storage.incrementForecastCount(req.userId!).catch(() => {});
 
@@ -197,14 +205,18 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
     });
 
     const forecast = await storage.createForecast({
-      terminalId,
+      terminalId: String(terminalId),
       productType,
       expectedMin: score.expectedRange.min,
       expectedMax: score.expectedRange.max,
       bias: score.bias,
       confidence: score.confidence,
       suggestedAction: score.suggestedAction,
-    });
+      depotPrice: 0,
+      refineryInfluenceScore: 0,
+      importParityPrice: 0,
+      demandIndex: 0,
+    } as any);
 
     onForecastCreated(terminalId, forecast).catch((err) =>
       console.error(`[Notify] Error in score notification: ${err.message}`)
