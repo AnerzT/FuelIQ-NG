@@ -164,7 +164,6 @@ export const notificationLogs = pgTable("notification_logs", {
   alertType: text("alert_type"),
   status: text("status").default("sent"),
   sentAt: timestamp("sent_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── INVENTORY ────────────────────────────────────────────────────────────────
@@ -237,12 +236,13 @@ export const insertExternalPriceFeedSchema = createInsertSchema(externalPriceFee
 export const insertFxRateSchema = createInsertSchema(fxRates);
 
 export const loginSchema = z.object({
-  username: z.string().min(1),
+  username: z.string().min(1).optional(),
+  email: z.string().optional(),
   password: z.string().min(1),
 });
 
 export const registerSchema = z.object({
-  username: z.string().min(3),
+  username: z.string().min(3).optional(),
   password: z.string().min(6),
   email: z.string().email().optional(),
   name: z.string().optional(),
