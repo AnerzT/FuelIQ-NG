@@ -57,8 +57,9 @@ async function detectTerminal(message: string): Promise<{ terminalId: string | n
   const allTerminals = await storage.getTerminals();
   const lower = message.toLowerCase();
   for (const t of allTerminals) {
-    if (lower.includes(t.name.toLowerCase()) || lower.includes(t.code.toLowerCase())) {
-      return { terminalId: t.id, terminalName: t.name };
+    const tCode = (t as any).code ?? "";
+    if (lower.includes(t.name.toLowerCase()) || lower.includes(tCode.toLowerCase())) {
+      return { terminalId: String(t.id), terminalName: t.name };
     }
   }
   return { terminalId: null, terminalName: null };
@@ -75,8 +76,8 @@ export async function getTraderSignals(req: AuthRequest, res: Response) {
     let avgSentiment = 0;
     let avgImpact = 0;
     if (signals.length > 0) {
-      avgSentiment = signals.reduce((sum, s) => sum + (s.sentimentScore || 0), 0) / signals.length;
-      avgImpact = signals.reduce((sum, s) => sum + (s.impactScore || 0), 0) / signals.length;
+      avgSentiment = signals.reduce((sum, s) => sum + ((s as any).sentimentScore || 0), 0) / signals.length;
+      avgImpact = signals.reduce((sum, s) => sum + ((s as any).impactScore || 0), 0) / signals.length;
     }
 
     return res.json({
@@ -108,17 +109,22 @@ export async function submitTraderSignal(req: AuthRequest, res: Response) {
     const detectedProduct = detectProduct(message);
     const { terminalId: detectedTerminalId, terminalName: detectedTerminalName } = await detectTerminal(message);
 
+    const resolvedTerminalId = terminalId || detectedTerminalId || "1";
+
     const signal = await storage.createTraderSignal({
-      userId,
+      userId: Number(userId),
       message,
       sentimentScore,
       impactScore,
-      terminalId: terminalId || detectedTerminalId || null,
+      terminalId: String(resolvedTerminalId),
       productType: productType || detectedProduct || "PMS",
       detectedTerminal: detectedTerminalName,
       detectedProduct: detectedProduct,
       keywords,
-    });
+      action: sentimentScore > 0.2 ? "BUY" : sentimentScore < -0.2 ? "SELL" : "HOLD",
+      confidence: Math.round(impactScore * 100),
+      notes: null,
+    } as any);
 
     return res.status(201).json({
       success: true,
