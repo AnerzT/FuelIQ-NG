@@ -1,4 +1,4 @@
-import type { MarketSignal, PriceHistoryEntry, ExternalPriceFeed, FxRate, ProductType } from "../shared/schema.js";
+import type { MarketSignal, PriceHistoryEntry, ExternalPriceFeed, FxRate } from "../../shared/schema.js";
 
 export interface ScoringInput {
   signal: MarketSignal;
@@ -140,12 +140,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function normalizeLevel(value: string): string {
+function normalizeLevel(value: string | null | undefined): string {
+  if (!value) return "";
   const v = value.trim();
   return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
 }
 
-function encodeSignal(key: string, value: string): number {
+function encodeSignal(key: string, value: string | null | undefined): number {
+  if (!value) return 0.5;
   const level = normalizeLevel(value);
   return SIGNAL_ENCODING[key]?.[level] ?? 0.5;
 }
@@ -172,7 +174,7 @@ function computeHistoricalStdDev(history: PriceHistoryEntry[]): number {
 function computePriceTrend(history: PriceHistoryEntry[]): number {
   if (history.length < 2) return 0.5;
   const sorted = [...history].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    (a, b) => new Date((a as any).date ?? a.recordedAt).getTime() - new Date((b as any).date ?? b.recordedAt).getTime()
   );
   const n = sorted.length;
   const prices = sorted.map((p) => p.price);
@@ -201,15 +203,15 @@ function computeFxVolatility(fxRates: FxRate[]): number {
 }
 
 function computeRefineryOutputIndex(signal: MarketSignal, nnpcFeed: ExternalPriceFeed | null | undefined): number {
-  const supplyScore = encodeSignal("nnpcSupply", signal.nnpcSupply);
+  const supplyScore = encodeSignal("nnpcSupply", (signal as any).nnpcSupply);
   if (!nnpcFeed) return supplyScore;
   const priceFactor = nnpcFeed.price > 0 ? clamp(nnpcFeed.price / 700, 0, 1) : 0.5;
   return (supplyScore * 0.6 + priceFactor * 0.4);
 }
 
 function computeDemandIndex(signal: MarketSignal, priceTrend: number): number {
-  const truckDemand = encodeSignal("truckQueue", signal.truckQueue);
-  const fxDemand = encodeSignal("fxPressure", signal.fxPressure);
+  const truckDemand = encodeSignal("truckQueue", (signal as any).truckQueue);
+  const fxDemand = encodeSignal("fxPressure", (signal as any).fxPressure);
   return (truckDemand * 0.4 + fxDemand * 0.25 + priceTrend * 0.35);
 }
 
@@ -219,10 +221,10 @@ function buildFeatureVector(input: ScoringInput): FeatureVector {
 
   return {
     fxVolatility: computeFxVolatility(fxRates ?? []),
-    vesselCount: encodeSignal("vesselActivity", signal.vesselActivity),
+    vesselCount: encodeSignal("vesselActivity", (signal as any).vesselActivity),
     refineryOutputIndex: computeRefineryOutputIndex(signal, nnpcFeed),
     depotSpread: clamp(input.depotSpread ?? 0.5, 0, 1),
-    regulationImpact: encodeSignal("policyRisk", signal.policyRisk),
+    regulationImpact: encodeSignal("policyRisk", (signal as any).policyRisk),
     demandIndex: computeDemandIndex(signal, priceTrend),
     historicalVolatility: computeHistoricalVolatility(priceHistory),
     traderSentimentScore: clamp((input.traderSentiment ?? 0) + 0.5, 0, 1),
@@ -359,14 +361,12 @@ function computeExpectedRange(
   }
 
   const sorted = [...priceHistory].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => new Date((b as any).date ?? b.recordedAt).getTime() - new Date((a as any).date ?? a.recordedAt).getTime()
   );
   const recent = sorted.slice(0, Math.min(7, sorted.length));
   const prices = recent.map((p) => p.price);
   const currentPrice = prices[0];
-
   const stdDev = computeHistoricalStdDev(priceHistory);
-
   const directionShift = (sigmoidP - 0.5) * stdDev * 0.6;
 
   return {
@@ -397,11 +397,9 @@ function generateAction(
     } else {
       actions.push(`${label} price increase likely — consider early procurement`);
     }
-
     if (riskFactor > 1.6) {
       actions.push(`High risk factor (${riskFactor.toFixed(2)}) — elevated market uncertainty`);
     }
-
     if (pt === "AGO" && features.fxVolatility > 0.65) {
       actions.push("FX-driven diesel cost increase — lock in AGO rates immediately");
     } else if ((pt === "JET_A1" || pt === "ATK") && features.fxVolatility > 0.65) {
@@ -434,7 +432,7 @@ function generateAction(
 }
 
 export function computeForecastScore(input: ScoringInput): ForecastScore {
-  const pt = input.productType || input.signal.productType || "PMS";
+  const pt = input.productType || (input.signal as any).productType || "PMS";
 
   const features = buildFeatureVector(input);
   const adaptiveWeights = computeAdaptiveWeights(features, pt);
