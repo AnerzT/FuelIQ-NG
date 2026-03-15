@@ -96,7 +96,7 @@ export async function triggerTestNotification(req: AuthRequest, res: Response) {
 
     if (channel === "sms" || channel === "all") {
       if (user.phone) {
-        const { sendSms } = await import("../services/smsService");
+        const { sendSms } = await import("../services/smsService.js");
         const smsResult = await sendSms(user.phone, "[FuelIQ] Test notification — your SMS alerts are working!");
         results.sms = smsResult;
 
@@ -106,8 +106,7 @@ export async function triggerTestNotification(req: AuthRequest, res: Response) {
           alertType: "test",
           message: "Test SMS notification",
           status: smsResult.success ? "sent" : "failed",
-          externalId: smsResult.messageId || null,
-        });
+        } as any);
       } else {
         results.sms = { success: false, error: "No phone number configured" };
       }
@@ -115,7 +114,7 @@ export async function triggerTestNotification(req: AuthRequest, res: Response) {
 
     if (channel === "whatsapp" || channel === "all") {
       if (user.whatsappPhone) {
-        const whatsappService = await import("../services/whatsappService");
+        const whatsappService = await import("../services/whatsappService.js");
         const waResult = await whatsappService.sendForecastAlert(
           "Test Terminal", "neutral",
           { increase: 33, decrease: 33, stable: 34 },
