@@ -83,10 +83,11 @@ export async function syncFxRate(): Promise<{
     rate = simulateFxRate();
   }
 
-  const stored = await storage.createFxRate({
+  await storage.createFxRate({
+    fromCurrency: "USD",
+    toCurrency: "NGN",
     rate,
-    source: source === "api" ? "exchangerate.host" : "simulated",
-  });
+  } as any);
 
   const recentRates = await storage.getFxRates(2);
   const previousRate = recentRates.length > 1 ? recentRates[1].rate : null;
@@ -165,17 +166,22 @@ export async function updateFxPressureSignals(): Promise<number> {
 
   for (const terminal of activeTerminals) {
     try {
-      const existing = await storage.getLatestSignal(terminal.id);
+      const terminalId = String(terminal.id);
+      const existing = await storage.getLatestSignal(terminalId);
       if (!existing) continue;
 
       await storage.createSignal({
-        terminalId: terminal.id,
-        vesselActivity: existing.vesselActivity,
-        truckQueue: existing.truckQueue,
-        nnpcSupply: existing.nnpcSupply,
+        terminalId,
+        productType: (existing as any).productType || "PMS",
+        vesselActivity: (existing as any).vesselActivity || null,
+        truckQueue: (existing as any).truckQueue || null,
+        nnpcSupply: (existing as any).nnpcSupply || null,
         fxPressure,
-        policyRisk: existing.policyRisk,
-      });
+        policyRisk: (existing as any).policyRisk || null,
+        signalType: null,
+        value: null,
+        description: null,
+      } as any);
 
       updated++;
     } catch (err: any) {
