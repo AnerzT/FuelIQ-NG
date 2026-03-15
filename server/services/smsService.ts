@@ -1,5 +1,5 @@
 import { storage } from "../storage.js";
-import type { NotificationPrefs } from "../shared/schema";
+import type { NotificationPrefs } from "../../shared/schema.js";
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
@@ -139,22 +139,22 @@ export async function sendRefineryAlert(
   return broadcastSms("refineryAlerts", message);
 }
 
-async function broadcastSms(alertType: keyof NotificationPrefs, message: string): Promise<number> {
-  const allUsers = await storage.getSubscribedUsers("sms", alertType);
+async function broadcastSms(alertType: string, message: string): Promise<number> {
+  const allUsers = await storage.getSubscribedUsers("sms", alertType as keyof NotificationPrefs);
   let sent = 0;
 
   for (const user of allUsers) {
-    if (!user.phone) continue;
+    const userPhone = (user as any).phone;
+    if (!userPhone) continue;
 
-    const result = await sendSms(user.phone, message);
+    const result = await sendSms(userPhone, message);
     await storage.createNotificationLog({
       userId: user.id,
       channel: "sms",
-      alertType,
+      alertType: String(alertType),
       message,
       status: result.success ? "sent" : "failed",
-      externalId: result.messageId || null,
-    });
+    } as any);
 
     if (result.success) sent++;
   }
