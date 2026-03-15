@@ -35,6 +35,17 @@ function clearAttempts(key: string): void {
   loginAttempts.delete(key);
 }
 
+function safeUserData(user: any) {
+  return {
+    id: user.id,
+    name: user.name ?? user.username,
+    email: user.email,
+    role: user.role,
+    subscriptionTier: user.subscriptionTier,
+    createdAt: user.createdAt,
+  };
+}
+
 export async function register(req: Request, res: Response) {
   try {
     const parsed = registerSchema.safeParse(req.body);
@@ -45,40 +56,41 @@ export async function register(req: Request, res: Response) {
       });
     }
 
-    const { name, email, password } = parsed.data;
+    const { name, email, password, username } = parsed.data as any;
+    const resolvedEmail = email?.toLowerCase().trim();
+    const resolvedUsername = username ?? resolvedEmail ?? name;
 
-    if (password.length < 6) {
+    if (!password || password.length < 6) {
       return res.status(400).json({
         success: false,
         message: "Password must be at least 6 characters",
       });
     }
 
-    const existing = await storage.getUserByEmail(email);
-    if (existing) {
-      return res.status(409).json({
-        success: false,
-        message: "Email already registered",
-      });
+    if (resolvedEmail) {
+      const existing = await storage.getUserByEmail(resolvedEmail);
+      if (existing) {
+        return res.status(409).json({
+          success: false,
+          message: "Email already registered",
+        });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = await storage.createUser({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
+      username: resolvedUsername,
+      email: resolvedEmail,
       password: hashedPassword,
       role: "marketer",
-    });
+    } as any);
 
-    const token = generateToken(user.id);
+    const token = generateToken(String(user.id));
 
     return res.status(201).json({
       success: true,
       message: "Account created successfully",
-      data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
-        token,
-      },
+      data: { user: safeUserData(user), token },
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -87,18 +99,10 @@ export async function register(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
   try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || "Invalid input",
-      });
-    }
+    const { email, username, password } = req.body;
+    const resolvedEmail = (email || username || "").toLowerCase().trim();
 
-    const { email, password } = parsed.data;
-    const normalizedEmail = email.toLowerCase().trim();
-    const lockoutKey = normalizedEmail;
-
+    const lockoutKey = resolvedEmail;
     const lockout = checkLockout(lockoutKey);
     if (lockout.locked) {
       const minutes = Math.ceil(lockout.remainingMs / 60000);
@@ -108,7 +112,7 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    const user = await storage.getUserByEmail(normalizedEmail);
+    const user = await storage.getUserByEmail(resolvedEmail);
     if (!user) {
       recordFailedAttempt(lockoutKey);
       return res.status(401).json({
@@ -127,15 +131,12 @@ export async function login(req: Request, res: Response) {
     }
 
     clearAttempts(lockoutKey);
-    const token = generateToken(user.id);
+    const token = generateToken(String(user.id));
 
     return res.json({
       success: true,
       message: "Login successful",
-      data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
-        token,
-      },
+      data: { user: safeUserData(user), token },
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -149,15 +150,12 @@ export async function refreshToken(req: AuthRequest, res: Response) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const token = generateToken(user.id);
+    const token = generateToken(String(user.id));
 
     return res.json({
       success: true,
       message: "Token refreshed successfully",
-      data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
-        token,
-      },
+      data: { user: safeUserData(user), token },
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -173,9 +171,7 @@ export async function getMe(req: AuthRequest, res: Response) {
 
     return res.json({
       success: true,
-      data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role, subscriptionTier: user.subscriptionTier, createdAt: user.createdAt },
-      },
+      data: { user: safeUserData(user) },
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
