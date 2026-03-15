@@ -24,16 +24,18 @@ export async function getInventoryWithPnL(req: AuthRequest, res: Response) {
     const enriched = await Promise.all(
       items.map(async (item) => {
         const forecast = await storage.getLatestForecast(item.terminalId, item.productType);
+        const itemAverageCost = (item as any).averageCost ?? 0;
+        const itemVolumeLitres = (item as any).volumeLitres ?? (item as any).quantityLitres ?? 0;
         const currentPrice = forecast
           ? (forecast.expectedMin + forecast.expectedMax) / 2
-          : item.averageCost;
-        const unrealizedPnL = (currentPrice - item.averageCost) * item.volumeLitres;
-        const pnlPercent = item.averageCost > 0
-          ? ((currentPrice - item.averageCost) / item.averageCost) * 100
+          : itemAverageCost;
+        const unrealizedPnL = (currentPrice - itemAverageCost) * itemVolumeLitres;
+        const pnlPercent = itemAverageCost > 0
+          ? ((currentPrice - itemAverageCost) / itemAverageCost) * 100
           : 0;
 
         const restockThreshold = 5000;
-        const needsRestock = item.volumeLitres < restockThreshold;
+        const needsRestock = itemVolumeLitres < restockThreshold;
 
         return {
           ...item,
@@ -68,17 +70,17 @@ export async function createInventory(req: AuthRequest, res: Response) {
     if (!terminalId || !productType) {
       return res.status(400).json({ success: false, message: "terminalId and productType are required" });
     }
-    const terminal = await storage.getTerminal(terminalId);
+    const terminal = await storage.getTerminal(String(terminalId));
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
     const item = await storage.createInventory({
-      userId,
-      terminalId,
+      userId: String(userId),
+      terminalId: String(terminalId),
       productType,
-      volumeLitres: volumeLitres || 0,
-      averageCost: averageCost || 0,
-    });
+      volumeLitres: Number(volumeLitres) || 0,
+      averageCost: Number(averageCost) || 0,
+    } as any);
     return res.status(201).json({ success: true, data: item });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -96,7 +98,7 @@ export async function createTransaction(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, message: "type must be BUY or SELL" });
     }
 
-    const inventoryItem = await storage.getInventoryItem(inventoryId);
+    const inventoryItem = await storage.getInventoryItem(String(inventoryId));
     if (!inventoryItem) {
       return res.status(404).json({ success: false, message: "Inventory item not found" });
     }
@@ -104,31 +106,37 @@ export async function createTransaction(req: AuthRequest, res: Response) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    if (type === "SELL" && volume > inventoryItem.volumeLitres) {
+    const itemVolumeLitres = (inventoryItem as any).volumeLitres ?? (inventoryItem as any).quantityLitres ?? 0;
+    const itemAverageCost = (inventoryItem as any).averageCost ?? 0;
+
+    if (type === "SELL" && Number(volume) > itemVolumeLitres) {
       return res.status(400).json({ success: false, message: "Insufficient volume for sale" });
     }
 
     const transaction = await storage.createTransaction({
-      inventoryId,
+      userId: Number(userId),
+      inventoryId: String(inventoryId),
       type,
-      volume,
-      price,
+      amount: Number(price) * Number(volume),
+      currency: "NGN",
+      status: "completed",
+      reference: `${type}-${Date.now()}`,
       date: new Date(),
-    });
+    } as any);
 
     let newVolume: number;
     let newAvgCost: number;
 
     if (type === "BUY") {
-      const totalCost = inventoryItem.averageCost * inventoryItem.volumeLitres + price * volume;
-      newVolume = inventoryItem.volumeLitres + volume;
+      const totalCost = itemAverageCost * itemVolumeLitres + Number(price) * Number(volume);
+      newVolume = itemVolumeLitres + Number(volume);
       newAvgCost = newVolume > 0 ? totalCost / newVolume : 0;
     } else {
-      newVolume = inventoryItem.volumeLitres - volume;
-      newAvgCost = inventoryItem.averageCost;
+      newVolume = itemVolumeLitres - Number(volume);
+      newAvgCost = itemAverageCost;
     }
 
-    await storage.updateInventory(inventoryId, {
+    await storage.updateInventory(String(inventoryId), {
       volumeLitres: Math.round(newVolume * 100) / 100,
       averageCost: Math.round(newAvgCost * 100) / 100,
     });
@@ -144,7 +152,7 @@ export async function getTransactions(req: AuthRequest, res: Response) {
     const inventoryId = req.params.inventoryId as string;
     const userId = req.userId!;
 
-    const inventoryItem = await storage.getInventoryItem(inventoryId);
+    const inventoryItem = await storage.getInventoryItem(String(inventoryId));
     if (!inventoryItem) {
       return res.status(404).json({ success: false, message: "Inventory item not found" });
     }
@@ -152,7 +160,7 @@ export async function getTransactions(req: AuthRequest, res: Response) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    const txns = await storage.getTransactions(inventoryId);
+    const txns = await storage.getTransactions(String(inventoryId));
     return res.json({ success: true, data: txns });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
