@@ -53,13 +53,16 @@ export async function syncNnpcPriceFeed(): Promise<{
   }
 
   const feed = await storage.createExternalPriceFeed({
+    source: "NNPC",
     sourceName: "NNPC",
+    productType: "PMS",
     price,
     terminalId: null,
-  });
+    currency: "NGN",
+  } as any);
 
   console.log(`[NNPC] Synced PMS price: ₦${price}/litre (${source})`);
-  return { price, source, terminalId: feed.terminalId ?? undefined };
+  return { price, source, terminalId: (feed as any).terminalId ?? undefined };
 }
 
 function classifyNnpcSupply(currentPrice: number, previousPrice: number | null): "Strong" | "Moderate" | "Weak" {
@@ -86,20 +89,25 @@ export async function syncAndRecalculateForecasts(): Promise<{
 
   for (const terminal of activeTerminals) {
     try {
-      const existingSignal = await storage.getLatestSignal(terminal.id);
+      const terminalId = String(terminal.id);
+      const existingSignal = await storage.getLatestSignal(terminalId);
       if (!existingSignal) continue;
 
       const updatedSignal = await storage.createSignal({
-        terminalId: terminal.id,
-        vesselActivity: existingSignal.vesselActivity,
-        truckQueue: existingSignal.truckQueue,
+        terminalId,
+        productType: (existingSignal as any).productType || "PMS",
+        vesselActivity: (existingSignal as any).vesselActivity || null,
+        truckQueue: (existingSignal as any).truckQueue || null,
         nnpcSupply: nnpcSupplyLevel,
-        fxPressure: existingSignal.fxPressure,
-        policyRisk: existingSignal.policyRisk,
-      });
+        fxPressure: (existingSignal as any).fxPressure || null,
+        policyRisk: (existingSignal as any).policyRisk || null,
+        signalType: null,
+        value: null,
+        description: null,
+      } as any);
 
       const [history, nnpcFeeds, fxRatesData] = await Promise.all([
-        storage.getPriceHistory(terminal.id, 30),
+        storage.getPriceHistory(terminalId, 30),
         storage.getExternalPriceFeedBySource("NNPC", 1),
         storage.getFxRates(10),
       ]);
@@ -112,13 +120,18 @@ export async function syncAndRecalculateForecasts(): Promise<{
       });
 
       await storage.createForecast({
-        terminalId: terminal.id,
+        terminalId,
+        productType: "PMS",
         expectedMin: result.expectedRange.min,
         expectedMax: result.expectedRange.max,
         bias: result.bias,
         confidence: result.confidence,
         suggestedAction: result.suggestedAction,
-      });
+        depotPrice: 0,
+        refineryInfluenceScore: 0,
+        importParityPrice: 0,
+        demandIndex: 0,
+      } as any);
 
       forecastsUpdated++;
     } catch (err: any) {
