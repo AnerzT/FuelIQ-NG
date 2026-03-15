@@ -55,7 +55,7 @@ export interface IStorage {
 
   updateUserNotificationPrefs(userId: string, data: { phone?: string; whatsappPhone?: string; notificationPrefs?: Partial<NotificationPrefs> }): Promise<User | undefined>;
   getSubscribedUsers(channel: "sms" | "whatsapp", alertType: keyof NotificationPrefs): Promise<User[]>;
-  createNotificationLog(data: Omit<NotificationLog, "id" | "createdAt">): Promise<NotificationLog>;
+  createNotificationLog(data: Omit<NotificationLog, "id" | "sentAt">): Promise<NotificationLog>;
   getNotificationLogs(userId: string, limit?: number): Promise<NotificationLog[]>;
 
   updateUserSubscription(userId: string, data: { tier?: string; startDate?: Date; endDate?: Date; assignedTerminalId?: string }): Promise<User | undefined>;
@@ -90,7 +90,7 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const [user] = await db.select().from(users).where(eq(users.id, Number(id))).limit(1);
     return user;
   }
 
@@ -100,7 +100,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser & { role?: string }): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    const [user] = await db.insert(users).values(insertUser as any).returning();
     return user;
   }
 
@@ -109,7 +109,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTerminal(id: string): Promise<Terminal | undefined> {
-    const [terminal] = await db.select().from(terminals).where(eq(terminals.id, id)).limit(1);
+    const [terminal] = await db.select().from(terminals).where(eq(terminals.id, Number(id))).limit(1);
     return terminal;
   }
 
@@ -119,7 +119,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLatestSignal(terminalId: string, productType?: string): Promise<MarketSignal | undefined> {
-    const conditions = [eq(marketSignals.terminalId, terminalId)];
+    const conditions: any[] = [eq(marketSignals.terminalId, terminalId)];
     if (productType) conditions.push(eq(marketSignals.productType, productType));
     const [signal] = await db.select().from(marketSignals)
       .where(and(...conditions))
@@ -129,12 +129,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSignal(signal: Omit<MarketSignal, "id" | "createdAt">): Promise<MarketSignal> {
-    const [created] = await db.insert(marketSignals).values(signal).returning();
+    const [created] = await db.insert(marketSignals).values(signal as any).returning();
     return created;
   }
 
   async getLatestForecast(terminalId: string, productType?: string): Promise<Forecast | undefined> {
-    const conditions = [eq(forecasts.terminalId, terminalId)];
+    const conditions: any[] = [eq(forecasts.terminalId, terminalId)];
     if (productType) conditions.push(eq(forecasts.productType, productType));
     const [forecast] = await db.select().from(forecasts)
       .where(and(...conditions))
@@ -144,26 +144,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createForecast(forecast: Omit<Forecast, "id" | "createdAt">): Promise<Forecast> {
-    const [created] = await db.insert(forecasts).values(forecast).returning();
+    const [created] = await db.insert(forecasts).values(forecast as any).returning();
     return created;
   }
 
   async getPriceHistory(terminalId: string, limit = 30, productType?: string): Promise<PriceHistoryEntry[]> {
-    const conditions = [eq(priceHistory.terminalId, terminalId)];
+    const conditions: any[] = [eq(priceHistory.terminalId, terminalId)];
     if (productType) conditions.push(eq(priceHistory.productType, productType));
     return db.select().from(priceHistory)
       .where(and(...conditions))
-      .orderBy(desc(priceHistory.date))
+      .orderBy(desc(priceHistory.recordedAt))
       .limit(limit);
   }
 
   async createPriceHistory(entry: Omit<PriceHistoryEntry, "id">): Promise<PriceHistoryEntry> {
-    const [created] = await db.insert(priceHistory).values(entry).returning();
+    const [created] = await db.insert(priceHistory).values(entry as any).returning();
     return created;
   }
 
   async updateTerminal(id: string, data: Partial<Pick<Terminal, "active" | "name" | "state">>): Promise<Terminal | undefined> {
-    const [updated] = await db.update(terminals).set(data).where(eq(terminals.id, id)).returning();
+    const [updated] = await db.update(terminals).set(data as any).where(eq(terminals.id, Number(id))).returning();
     return updated;
   }
 
@@ -189,7 +189,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(terminals, eq(forecasts.terminalId, terminals.id))
       .orderBy(desc(forecasts.createdAt))
       .limit(limit);
-    return rows;
+    return rows as any;
   }
 
   async getForecasts(terminalId: string, limit = 20): Promise<(Forecast & { terminalName?: string })[]> {
@@ -215,7 +215,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(forecasts.terminalId, terminalId))
       .orderBy(desc(forecasts.createdAt))
       .limit(limit);
-    return rows;
+    return rows as any;
   }
 
   async getRefineryUpdates(limit = 20): Promise<RefineryUpdate[]> {
@@ -223,7 +223,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createRefineryUpdate(data: InsertRefineryUpdate): Promise<RefineryUpdate> {
-    const [created] = await db.insert(refineryUpdates).values(data).returning();
+    const [created] = await db.insert(refineryUpdates).values(data as any).returning();
     return created;
   }
 
@@ -232,16 +232,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createRegulationUpdate(data: InsertRegulationUpdate): Promise<RegulationUpdate> {
-    const [created] = await db.insert(regulationUpdates).values(data).returning();
+    const [created] = await db.insert(regulationUpdates).values(data as any).returning();
     return created;
   }
 
   async getExternalPriceFeeds(terminalId?: string, limit = 20): Promise<ExternalPriceFeed[]> {
-    const query = db.select().from(externalPriceFeeds);
     if (terminalId) {
-      return query.where(eq(externalPriceFeeds.terminalId, terminalId)).orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
+      return db.select().from(externalPriceFeeds)
+        .where(eq(externalPriceFeeds.terminalId, terminalId))
+        .orderBy(desc(externalPriceFeeds.createdAt))
+        .limit(limit);
     }
-    return query.orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
+    return db.select().from(externalPriceFeeds).orderBy(desc(externalPriceFeeds.createdAt)).limit(limit);
   }
 
   async getExternalPriceFeedBySource(sourceName: string, limit = 1): Promise<ExternalPriceFeed[]> {
@@ -252,7 +254,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createExternalPriceFeed(data: InsertExternalPriceFeed): Promise<ExternalPriceFeed> {
-    const [created] = await db.insert(externalPriceFeeds).values(data).returning();
+    const [created] = await db.insert(externalPriceFeeds).values(data as any).returning();
     return created;
   }
 
@@ -266,7 +268,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFxRate(data: InsertFxRate): Promise<FxRate> {
-    const [created] = await db.insert(fxRates).values(data).returning();
+    const [created] = await db.insert(fxRates).values(data as any).returning();
     return created;
   }
 
@@ -289,8 +291,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (Object.keys(updateData).length === 0) return existing;
-
-    const [updated] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+    const [updated] = await db.update(users).set(updateData).where(eq(users.id, Number(userId))).returning();
     return updated;
   }
 
@@ -299,23 +300,22 @@ export class DatabaseStorage implements IStorage {
     return allUsers.filter((user) => {
       const prefs = (user.notificationPrefs as NotificationPrefs) || null;
       if (!prefs) return false;
-
       if (channel === "sms") {
-        return prefs.smsEnabled && prefs[alertType] && !!user.phone;
+        return prefs.smsEnabled && prefs[alertType] && !!(user as any).phone;
       }
-      return prefs.whatsappEnabled && prefs[alertType] && !!user.whatsappPhone;
+      return prefs.whatsappEnabled && prefs[alertType] && !!(user as any).whatsappPhone;
     });
   }
 
-  async createNotificationLog(data: Omit<NotificationLog, "id" | "createdAt">): Promise<NotificationLog> {
-    const [created] = await db.insert(notificationLogs).values(data).returning();
+  async createNotificationLog(data: Omit<NotificationLog, "id" | "sentAt">): Promise<NotificationLog> {
+    const [created] = await db.insert(notificationLogs).values(data as any).returning();
     return created;
   }
 
   async getNotificationLogs(userId: string, limit = 50): Promise<NotificationLog[]> {
     return db.select().from(notificationLogs)
-      .where(eq(notificationLogs.userId, userId))
-      .orderBy(desc(notificationLogs.createdAt))
+      .where(eq(notificationLogs.userId, Number(userId)))
+      .orderBy(desc(notificationLogs.sentAt))
       .limit(limit);
   }
 
@@ -329,7 +329,7 @@ export class DatabaseStorage implements IStorage {
     if (data.endDate !== undefined) updateData.subscriptionEndDate = data.endDate;
     if (data.assignedTerminalId !== undefined) updateData.assignedTerminalId = data.assignedTerminalId;
     if (Object.keys(updateData).length === 0) return this.getUser(userId);
-    const [updated] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+    const [updated] = await db.update(users).set(updateData).where(eq(users.id, Number(userId))).returning();
     return updated;
   }
 
@@ -337,28 +337,28 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set({
       forecastsUsedToday: sql`${users.forecastsUsedToday} + 1`,
       forecastDayResetDate: new Date(),
-    }).where(eq(users.id, userId));
+    } as any).where(eq(users.id, Number(userId)));
   }
 
   async resetForecastCount(userId: string): Promise<void> {
     await db.update(users).set({
       forecastsUsedToday: 0,
       forecastDayResetDate: new Date(),
-    }).where(eq(users.id, userId));
+    } as any).where(eq(users.id, Number(userId)));
   }
 
   async incrementSmsCount(userId: string): Promise<void> {
     await db.update(users).set({
       smsAlertsUsedThisWeek: sql`${users.smsAlertsUsedThisWeek} + 1`,
       smsWeekResetDate: sql`COALESCE(${users.smsWeekResetDate}, NOW())`,
-    }).where(eq(users.id, userId));
+    } as any).where(eq(users.id, Number(userId)));
   }
 
   async resetSmsCount(userId: string): Promise<void> {
     await db.update(users).set({
       smsAlertsUsedThisWeek: 0,
       smsWeekResetDate: new Date(),
-    }).where(eq(users.id, userId));
+    } as any).where(eq(users.id, Number(userId)));
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -366,28 +366,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDepots(terminalId?: string): Promise<(Depot & { terminalName?: string })[]> {
-    const baseQuery = db.select({
+    const rows = await db.select({
       id: depots.id,
       name: depots.name,
+      location: depots.location,
+      region: depots.region,
       terminalId: depots.terminalId,
       owner: depots.owner,
       active: depots.active,
+      isActive: depots.isActive,
+      createdAt: depots.createdAt,
       terminalName: terminals.name,
-    }).from(depots).leftJoin(terminals, eq(depots.terminalId, terminals.id));
-
-    if (terminalId) {
-      return baseQuery.where(eq(depots.terminalId, terminalId));
-    }
-    return baseQuery;
+    }).from(depots)
+      .leftJoin(terminals, eq(depots.terminalId, terminals.id))
+      .where(terminalId ? eq(depots.terminalId, terminalId) : undefined);
+    return rows as any;
   }
 
   async getDepot(id: string): Promise<Depot | undefined> {
-    const [depot] = await db.select().from(depots).where(eq(depots.id, id)).limit(1);
+    const [depot] = await db.select().from(depots).where(eq(depots.id, Number(id))).limit(1);
     return depot;
   }
 
   async createDepot(data: Omit<Depot, "id">): Promise<Depot> {
-    const [created] = await db.insert(depots).values(data).returning();
+    const [created] = await db.insert(depots).values(data as any).returning();
     return created;
   }
 
@@ -402,6 +404,7 @@ export class DatabaseStorage implements IStorage {
       productType: depotPrices.productType,
       price: depotPrices.price,
       updatedAt: depotPrices.updatedAt,
+      recordedAt: depotPrices.recordedAt,
       depotName: depots.name,
       terminalName: terminals.name,
       terminalId: depots.terminalId,
@@ -412,16 +415,19 @@ export class DatabaseStorage implements IStorage {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(depotPrices.price);
 
-    return rows;
+    return rows as any;
   }
 
   async createDepotPrice(data: Omit<DepotPrice, "id">): Promise<DepotPrice> {
-    const [created] = await db.insert(depotPrices).values(data).returning();
+    const [created] = await db.insert(depotPrices).values(data as any).returning();
     return created;
   }
 
   async updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined> {
-    const [updated] = await db.update(depotPrices).set({ price, updatedAt: new Date() }).where(eq(depotPrices.id, id)).returning();
+    const [updated] = await db.update(depotPrices)
+      .set({ price, updatedAt: new Date() } as any)
+      .where(eq(depotPrices.id, Number(id)))
+      .returning();
     return updated;
   }
 
@@ -430,45 +436,52 @@ export class DatabaseStorage implements IStorage {
     if (terminalId) conditions.push(eq(inventory.terminalId, terminalId));
     if (productType) conditions.push(eq(inventory.productType, productType));
 
-    return db.select({
+    const rows = await db.select({
       id: inventory.id,
       userId: inventory.userId,
       terminalId: inventory.terminalId,
       productType: inventory.productType,
       volumeLitres: inventory.volumeLitres,
       averageCost: inventory.averageCost,
+      quantityLitres: inventory.quantityLitres,
       lastUpdated: inventory.lastUpdated,
+      updatedAt: inventory.updatedAt,
       terminalName: terminals.name,
     })
     .from(inventory)
     .leftJoin(terminals, eq(inventory.terminalId, terminals.id))
     .where(and(...conditions));
+
+    return rows as any;
   }
 
   async getInventoryItem(id: string): Promise<Inventory | undefined> {
-    const [item] = await db.select().from(inventory).where(eq(inventory.id, id)).limit(1);
+    const [item] = await db.select().from(inventory).where(eq(inventory.id, Number(id))).limit(1);
     return item;
   }
 
   async createInventory(data: Omit<Inventory, "id" | "lastUpdated">): Promise<Inventory> {
-    const [created] = await db.insert(inventory).values(data).returning();
+    const [created] = await db.insert(inventory).values(data as any).returning();
     return created;
   }
 
   async updateInventory(id: string, data: Partial<Pick<Inventory, "volumeLitres" | "averageCost">>): Promise<Inventory | undefined> {
-    const [updated] = await db.update(inventory).set({ ...data, lastUpdated: new Date() }).where(eq(inventory.id, id)).returning();
+    const [updated] = await db.update(inventory)
+      .set({ ...data, lastUpdated: new Date(), updatedAt: new Date() } as any)
+      .where(eq(inventory.id, Number(id)))
+      .returning();
     return updated;
   }
 
   async getTransactions(inventoryId: string, limit = 50): Promise<Transaction[]> {
     return db.select().from(transactions)
       .where(eq(transactions.inventoryId, inventoryId))
-      .orderBy(desc(transactions.date))
+      .orderBy(desc(transactions.createdAt))
       .limit(limit);
   }
 
   async createTransaction(data: Omit<Transaction, "id">): Promise<Transaction> {
-    const [created] = await db.insert(transactions).values(data).returning();
+    const [created] = await db.insert(transactions).values(data as any).returning();
     return created;
   }
 
@@ -476,7 +489,7 @@ export class DatabaseStorage implements IStorage {
     const conditions: any[] = [];
     if (terminalId) conditions.push(eq(traderSignals.terminalId, terminalId));
 
-    return db.select({
+    const rows = await db.select({
       id: traderSignals.id,
       userId: traderSignals.userId,
       message: traderSignals.message,
@@ -484,6 +497,9 @@ export class DatabaseStorage implements IStorage {
       impactScore: traderSignals.impactScore,
       terminalId: traderSignals.terminalId,
       productType: traderSignals.productType,
+      action: traderSignals.action,
+      confidence: traderSignals.confidence,
+      notes: traderSignals.notes,
       detectedTerminal: traderSignals.detectedTerminal,
       detectedProduct: traderSignals.detectedProduct,
       keywords: traderSignals.keywords,
@@ -495,15 +511,17 @@ export class DatabaseStorage implements IStorage {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(traderSignals.createdAt))
     .limit(limit);
+
+    return rows as any;
   }
 
   async createTraderSignal(data: Omit<TraderSignal, "id" | "createdAt">): Promise<TraderSignal> {
-    const [created] = await db.insert(traderSignals).values(data).returning();
+    const [created] = await db.insert(traderSignals).values(data as any).returning();
     return created;
   }
 
   async getHedgeRecommendations(userId: string, productType?: string, limit = 20): Promise<HedgeRecommendation[]> {
-    const conditions: any[] = [eq(hedgeRecommendations.userId, userId)];
+    const conditions: any[] = [eq(hedgeRecommendations.userId, Number(userId))];
     if (productType) conditions.push(eq(hedgeRecommendations.productType, productType));
 
     return db.select().from(hedgeRecommendations)
@@ -513,7 +531,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createHedgeRecommendation(data: Omit<HedgeRecommendation, "id" | "createdAt">): Promise<HedgeRecommendation> {
-    const [created] = await db.insert(hedgeRecommendations).values(data).returning();
+    const [created] = await db.insert(hedgeRecommendations).values(data as any).returning();
     return created;
   }
 }
