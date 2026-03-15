@@ -3,7 +3,7 @@ import type { AuthRequest } from "./auth.js";
 import { TIER_LIMITS, type SubscriptionTier } from "../../shared/schema.js";
 import { storage } from "../storage.js";
 
-const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, elite: 2 };
+const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, basic: 1, pro: 2, elite: 3, enterprise: 4 };
 
 function getTier(req: AuthRequest): SubscriptionTier {
   return req.subscriptionTier || "free";
