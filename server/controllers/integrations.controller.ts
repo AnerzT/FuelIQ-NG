@@ -8,7 +8,7 @@ import { storage } from "../storage.js";
 export async function getNnpcPrice(_req: AuthRequest, res: Response) {
   try {
     const feeds = await storage.getExternalPriceFeeds(undefined, 10);
-    const nnpcFeeds = feeds.filter((f) => f.sourceName === "NNPC");
+    const nnpcFeeds = feeds.filter((f) => (f.sourceName ?? f.source) === "NNPC");
     const latest = nnpcFeeds[0] ?? null;
 
     return res.json({
