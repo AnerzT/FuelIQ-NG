@@ -3,7 +3,7 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import express from "express";
-import { registerRoutes } from "./routes.js";
+import registerRoutes from "./routes.js";
 import { serveStatic } from "./static.js";
 import { createServer } from "http";
 import {
@@ -31,7 +31,7 @@ if (isProduction) {
   app.use(setupApiRateLimit());
 }
 
-registerRoutes(app);
+await registerRoutes(httpServer, app);
 serveStatic(app);
 
 app.use(notFoundHandler);
@@ -45,4 +45,4 @@ if (process.env.NODE_ENV !== "production") {
     console.log(`Server running on port ${PORT}`);
   });
 }
-//Deployment Trigger V8
+//Deployment Trigger V10
