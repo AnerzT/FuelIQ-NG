@@ -30,11 +30,18 @@ export async function createDepot(req: AuthRequest, res: Response) {
     if (!name || !terminalId || !owner) {
       return res.status(400).json({ success: false, message: "name, terminalId, and owner are required" });
     }
-    const terminal = await storage.getTerminal(terminalId);
+    const terminal = await storage.getTerminal(String(terminalId));
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
-    const depot = await storage.createDepot({ name, terminalId, owner, active: active ?? true });
+    const depot = await storage.createDepot({
+      name,
+      location: "Nigeria",
+      terminalId: String(terminalId),
+      owner,
+      active: active ?? true,
+      isActive: active ?? true,
+    } as any);
     return res.status(201).json({ success: true, data: depot });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -70,7 +77,10 @@ export async function getDepotPrices(req: AuthRequest, res: Response) {
         const arbitragePercent = lowestByProduct[pt].price > 0
           ? (spread / lowestByProduct[pt].price) * 100
           : 0;
-        spreads[pt] = { spread: Math.round(spread * 100) / 100, arbitragePercent: Math.round(arbitragePercent * 100) / 100 };
+        spreads[pt] = {
+          spread: Math.round(spread * 100) / 100,
+          arbitragePercent: Math.round(arbitragePercent * 100) / 100,
+        };
       }
     }
 
@@ -94,11 +104,17 @@ export async function createDepotPrice(req: AuthRequest, res: Response) {
     if (!depotId || !productType || price === undefined) {
       return res.status(400).json({ success: false, message: "depotId, productType, and price are required" });
     }
-    const depot = await storage.getDepot(depotId);
+    const depot = await storage.getDepot(String(depotId));
     if (!depot) {
       return res.status(404).json({ success: false, message: "Depot not found" });
     }
-    const depotPrice = await storage.createDepotPrice({ depotId, productType, price, updatedAt: new Date() });
+    const depotPrice = await storage.createDepotPrice({
+      depotId: String(depotId),
+      productType,
+      price: Number(price),
+      updatedAt: new Date(),
+      recordedAt: new Date(),
+    } as any);
     return res.status(201).json({ success: true, data: depotPrice });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -112,7 +128,7 @@ export async function updateDepotPrice(req: AuthRequest, res: Response) {
     if (price === undefined) {
       return res.status(400).json({ success: false, message: "price is required" });
     }
-    const updated = await storage.updateDepotPrice(id as string, price);
+    const updated = await storage.updateDepotPrice(String(id), Number(price));
     if (!updated) {
       return res.status(404).json({ success: false, message: "Depot price not found" });
     }
