@@ -221,15 +221,9 @@ export const hedgeRecommendations = pgTable("hedge_recommendations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// ─── INSERT SCHEMAS ───────────────────────────────────────────────────────────
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  email: true,
-});
-
-export const insertForecastSchema = createInsertSchema(forecasts);
-export const insertMarketSignalSchema = createInsertSchema(marketSignals);
+// --- INSERT SCHEMAS ---
+export const insertUsersSchema = createInsertSchema(users);
+export const insertMarketSignalsSchema = createInsertSchema(marketSignals);
 export const insertRefineryUpdateSchema = createInsertSchema(refineryUpdates);
 export const insertRegulationUpdateSchema = createInsertSchema(regulationUpdates);
 export const insertExternalPriceFeedSchema = createInsertSchema(externalPriceFeeds);
@@ -265,7 +259,6 @@ export const updateSubscriptionSchema = z.object({
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 export type SubscriptionTier = "free" | "basic" | "pro" | "elite" | "enterprise";
 
-// Use 'as const' to make TypeScript infer literal types
 export const TIER_LIMITS = {
   free:       { label: "Free",       forecasts: 3,   forecastsPerDay: 3,   smsAlerts: 0,  smsAlertsPerWeek: 0,  dataDelay: 60 },
   basic:      { label: "Basic",      forecasts: 10,  forecastsPerDay: 10,  smsAlerts: 5,  smsAlertsPerWeek: 5,  dataDelay: 30 },
@@ -273,9 +266,6 @@ export const TIER_LIMITS = {
   elite:      { label: "Elite",      forecasts: 100, forecastsPerDay: 100, smsAlerts: 50, smsAlertsPerWeek: 50, dataDelay: 0  },
   enterprise: { label: "Enterprise", forecasts: 999, forecastsPerDay: 999, smsAlerts: 99, smsAlertsPerWeek: 99, dataDelay: 0  },
 } as const;
-
-// Extract the type from the constant
-export type TierLimit = typeof TIER_LIMITS[keyof typeof TIER_LIMITS];
 
 export const PRODUCT_TYPES = ["PMS", "AGO", "DPK", "LPG"] as const;
 export type ProductType = typeof PRODUCT_TYPES[number];
@@ -291,11 +281,11 @@ export type NotificationPrefs = {
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertUser = z.infer<typeof insertUsersSchema>;
 export type Forecast = typeof forecasts.$inferSelect;
 export type InsertForecast = z.infer<typeof insertForecastSchema>;
 export type Signal = typeof marketSignals.$inferSelect;
-export type InsertSignal = z.infer<typeof insertMarketSignalSchema>;
+export type InsertSignal = z.infer<typeof insertMarketSignalsSchema>;
 export type Terminal = typeof terminals.$inferSelect;
 export type MarketSignal = typeof marketSignals.$inferSelect;
 export type PriceHistoryEntry = typeof priceHistory.$inferSelect;
