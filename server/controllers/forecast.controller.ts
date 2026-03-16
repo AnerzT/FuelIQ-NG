@@ -66,7 +66,9 @@ export async function createForecast(req: AuthRequest, res: Response) {
       });
     }
 
-    const { terminalId, productType } = parsed.data;
+    const data = parsed.data;
+    const terminalId = String(data.terminalId);
+    const productType = data.productType || "PMS";
 
     const terminal = await storage.getTerminal(terminalId);
     if (!terminal) {
@@ -74,9 +76,9 @@ export async function createForecast(req: AuthRequest, res: Response) {
     }
 
     const forecastData = {
-      ...parsed.data,
-      terminalId: String(terminalId),
-      productType: productType || "PMS",
+      ...data,
+      terminalId,
+      productType,
     };
 
     const forecast = await storage.createForecast(forecastData);
@@ -109,15 +111,21 @@ export async function generateForecast(req: AuthRequest, res: Response) {
     const history = await storage.getPriceHistory(terminalId, 30, productType);
     const result = computeForecast(signal, history, productType);
 
-    const forecast = await storage.createForecast({
+    const forecastData = {
       terminalId: String(terminalId),
       productType,
       depotPrice: 0,
       refineryInfluenceScore: 0,
       importParityPrice: 0,
       demandIndex: 0,
-      ...result,
-    });
+      expectedMin: result.expectedMin,
+      expectedMax: result.expectedMax,
+      bias: result.bias,
+      confidence: result.confidence,
+      suggestedAction: result.suggestedAction,
+    };
+
+    const forecast = await storage.createForecast(forecastData);
 
     // Don't await this - let it run in the background
     storage.incrementForecastCount(req.userId!).catch(() => {});
@@ -206,7 +214,7 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       productType,
     });
 
-    const forecast = await storage.createForecast({
+    const forecastData = {
       terminalId: String(terminalId),
       productType,
       expectedMin: score.expectedRange.min,
@@ -218,7 +226,9 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       refineryInfluenceScore: 0,
       importParityPrice: 0,
       demandIndex: 0,
-    });
+    };
+
+    const forecast = await storage.createForecast(forecastData);
 
     // Don't await this - let it run in the background
     onForecastCreated(terminalId, forecast).catch((err) =>
