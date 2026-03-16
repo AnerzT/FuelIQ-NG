@@ -222,8 +222,9 @@ export const hedgeRecommendations = pgTable("hedge_recommendations", {
 });
 
 // --- INSERT SCHEMAS ---
-export const insertUsersSchema = createInsertSchema(users);
-export const insertMarketSignalsSchema = createInsertSchema(marketSignals);
+export const insertUserSchema = createInsertSchema(users);
+export const insertForecastSchema = createInsertSchema(forecasts);
+export const insertMarketSignalSchema = createInsertSchema(marketSignals);
 export const insertRefineryUpdateSchema = createInsertSchema(refineryUpdates);
 export const insertRegulationUpdateSchema = createInsertSchema(regulationUpdates);
 export const insertExternalPriceFeedSchema = createInsertSchema(externalPriceFeeds);
@@ -281,11 +282,11 @@ export type NotificationPrefs = {
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUsersSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Forecast = typeof forecasts.$inferSelect;
 export type InsertForecast = z.infer<typeof insertForecastSchema>;
 export type Signal = typeof marketSignals.$inferSelect;
-export type InsertSignal = z.infer<typeof insertMarketSignalsSchema>;
+export type InsertSignal = z.infer<typeof insertMarketSignalSchema>;
 export type Terminal = typeof terminals.$inferSelect;
 export type MarketSignal = typeof marketSignals.$inferSelect;
 export type PriceHistoryEntry = typeof priceHistory.$inferSelect;
