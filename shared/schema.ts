@@ -220,7 +220,24 @@ export const hedgeRecommendations = pgTable("hedge_recommendations", {
   rationale: text("rationale"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+// Fix boolean type issues by extending the insert schemas
+export const insertForecastsSchema = createInsertSchema(forecasts).extend({
+  // Add explicit boolean handling for any boolean fields in forecasts table
+  // Example: if you have boolean fields, add them like this:
+  // isActive: z.boolean().optional(),
+});
 
+export const insertMarketSignalsSchema = createInsertSchema(marketSignals).extend({
+  // Handle boolean fields in marketSignals
+});
+
+export const insertRefineryUpdatesSchema = createInsertSchema(refineryUpdates).extend({
+  // Handle boolean fields in refineryUpdates
+});
+
+export const insertRegulationUpdatesSchema = createInsertSchema(regulationUpdates).extend({
+  // Handle boolean fields in regulationUpdates
+});
 // ─── INSERT SCHEMAS ───────────────────────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
