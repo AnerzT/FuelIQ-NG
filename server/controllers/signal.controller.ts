@@ -28,11 +28,17 @@ export async function getSignals(req: AuthRequest, res: Response) {
 
 export async function createSignal(req: AuthRequest, res: Response) {
   try {
-    const { terminalId, productType, vesselActivity, truckQueue, nnpcSupply, fxPressure, policyRisk, signalType, value, description } = req.body;
-
-    if (!terminalId) {
-      return res.status(400).json({ success: false, message: "terminalId is required" });
+    // Validate input using the schema
+    const parsed = insertMarketSignalSchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || "Invalid input",
+      });
     }
+
+    const { terminalId, productType, vesselActivity, truckQueue, nnpcSupply, fxPressure, policyRisk, signalType, value, description } = parsed.data;
 
     const terminal = await storage.getTerminal(String(terminalId));
     if (!terminal) {
@@ -50,12 +56,34 @@ export async function createSignal(req: AuthRequest, res: Response) {
       signalType: signalType || null,
       value: value ? Number(value) : null,
       description: description || null,
-    } as any);
+    });
 
     return res.status(201).json({
       success: true,
       message: "Market signal created successfully",
       data: signal,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getSignalHistory(req: AuthRequest, res: Response) {
+  try {
+    const { terminalId } = req.params;
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
+
+    const terminal = await storage.getTerminal(terminalId);
+    if (!terminal) {
+      return res.status(404).json({ success: false, message: "Terminal not found" });
+    }
+
+    const signals = await storage.getSignalHistory(terminalId, safeLimit);
+
+    return res.json({
+      success: true,
+      data: signals,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
