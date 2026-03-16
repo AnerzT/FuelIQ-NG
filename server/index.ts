@@ -146,47 +146,28 @@ export async function createApp(): Promise<Express> {
 }
 
 // For Vercel serverless, export the app directly
-let app: Express;
+const app = express();
 
-// Initialize app with error handling
-try {
-  // Create app immediately for Vercel
-  createApp().then(createdApp => {
-    app = createdApp;
-    console.log('✅ App initialized successfully');
-  }).catch(err => {
-    console.error('❌ Failed to initialize app:', err);
-    // Create a minimal app that just returns errors
-    const fallbackApp = express();
-    fallbackApp.use('*', (req, res) => {
-      res.status(500).json({ 
-        success: false, 
-        message: 'Application failed to initialize' 
-      });
-    });
-    app = fallbackApp;
+// Initialize in background (non-blocking)
+createApp().then(createdApp => {
+  // Copy all routes/middleware from createdApp to app
+  app.use(createdApp);
+  console.log('✅ App initialized successfully');
+}).catch(err => {
+  console.error('❌ Failed to initialize app:', err);
+  app.use('*', (req: Request, res: Response) => {
+    res.status(500).json({ success: false, message: 'Application failed to initialize' });
   });
-} catch (err) {
-  console.error('❌ Critical error during app creation:', err);
-  // Create a minimal fallback app
-  const fallbackApp = express();
-  fallbackApp.use('*', (req, res) => {
-    res.status(500).json({ 
-      success: false, 
-      message: 'Critical application error' 
-    });
-  });
-  app = fallbackApp;
-}
+});
 
-// Export the app for Vercel
+// Export the app for Vercel (synchronous, always defined)
 export default app;
 
 // For local development, start the server
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
-  createApp().then(app => {
-    const httpServer = createServer(app);
+  createApp().then(initializedApp => {
+    const httpServer = createServer(initializedApp);
     httpServer.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
