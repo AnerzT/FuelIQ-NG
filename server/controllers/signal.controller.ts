@@ -2,6 +2,9 @@ import type { Response } from "express";
 import { storage } from "../storage.js";
 import { insertMarketSignalSchema } from "../../shared/schema.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import type { z } from "zod";
+
+type MarketSignalInput = z.infer<typeof insertMarketSignalSchema>;
 
 export async function getSignals(req: AuthRequest, res: Response) {
   try {
@@ -38,7 +41,7 @@ export async function createSignal(req: AuthRequest, res: Response) {
       });
     }
 
-    const data = parsed.data;
+    const data = parsed.data as MarketSignalInput;
     const terminalId = String(data.terminalId);
 
     const terminal = await storage.getTerminal(terminalId);
@@ -55,7 +58,7 @@ export async function createSignal(req: AuthRequest, res: Response) {
       fxPressure: data.fxPressure || null,
       policyRisk: data.policyRisk || null,
       signalType: data.signalType || null,
-      value: data.value ? Number(data.value) : null,
+      value: data.value !== undefined && data.value !== null ? Number(data.value) : null,
       description: data.description || null,
     };
 
@@ -71,7 +74,6 @@ export async function createSignal(req: AuthRequest, res: Response) {
   }
 }
 
-// Note: You need to add this method to your storage class
 export async function getSignalHistory(req: AuthRequest, res: Response) {
   try {
     const { terminalId } = req.params;
@@ -83,14 +85,21 @@ export async function getSignalHistory(req: AuthRequest, res: Response) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
 
-    // If getSignalHistory doesn't exist in storage, use an alternative approach
-    // For now, just get the latest signal
-    const signal = await storage.getLatestSignal(terminalId);
-    
-    return res.json({
-      success: true,
-      data: signal ? [signal] : [],
-    });
+    // Try to get signal history, fallback to latest signal
+    try {
+      const signals = await storage.getSignalHistory(terminalId, safeLimit);
+      return res.json({
+        success: true,
+        data: signals,
+      });
+    } catch (error) {
+      // If getSignalHistory doesn't exist, just return the latest signal
+      const signal = await storage.getLatestSignal(terminalId);
+      return res.json({
+        success: true,
+        data: signal ? [signal] : [],
+      });
+    }
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
