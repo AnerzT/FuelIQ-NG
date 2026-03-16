@@ -265,20 +265,17 @@ export const updateSubscriptionSchema = z.object({
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 export type SubscriptionTier = "free" | "basic" | "pro" | "elite" | "enterprise";
 
-export const TIER_LIMITS: Record<SubscriptionTier, { 
-  label: string; 
-  forecasts: number; 
-  forecastsPerDay: number; 
-  smsAlerts: number; 
-  smsAlertsPerWeek: number; 
-  dataDelay: number 
-}> = {
+// Use 'as const' to make TypeScript infer literal types
+export const TIER_LIMITS = {
   free:       { label: "Free",       forecasts: 3,   forecastsPerDay: 3,   smsAlerts: 0,  smsAlertsPerWeek: 0,  dataDelay: 60 },
   basic:      { label: "Basic",      forecasts: 10,  forecastsPerDay: 10,  smsAlerts: 5,  smsAlertsPerWeek: 5,  dataDelay: 30 },
   pro:        { label: "Pro",        forecasts: 50,  forecastsPerDay: 50,  smsAlerts: 20, smsAlertsPerWeek: 20, dataDelay: 0  },
   elite:      { label: "Elite",      forecasts: 100, forecastsPerDay: 100, smsAlerts: 50, smsAlertsPerWeek: 50, dataDelay: 0  },
   enterprise: { label: "Enterprise", forecasts: 999, forecastsPerDay: 999, smsAlerts: 99, smsAlertsPerWeek: 99, dataDelay: 0  },
-};
+} as const;
+
+// Extract the type from the constant
+export type TierLimit = typeof TIER_LIMITS[keyof typeof TIER_LIMITS];
 
 export const PRODUCT_TYPES = ["PMS", "AGO", "DPK", "LPG"] as const;
 export type ProductType = typeof PRODUCT_TYPES[number];
@@ -290,7 +287,6 @@ export type NotificationPrefs = {
   priceAlerts?: boolean;
   refineryAlerts?: boolean;
   morningDigest?: boolean;
-  [key: string]: any;
 };
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
