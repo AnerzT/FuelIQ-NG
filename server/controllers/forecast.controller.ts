@@ -66,7 +66,7 @@ export async function createForecast(req: AuthRequest, res: Response) {
       });
     }
 
-    const { terminalId, productType } = parsed.data as any;
+    const { terminalId, productType } = parsed.data;
 
     const terminal = await storage.getTerminal(terminalId);
     if (!terminal) {
@@ -79,7 +79,7 @@ export async function createForecast(req: AuthRequest, res: Response) {
       productType: productType || "PMS",
     };
 
-    const forecast = await storage.createForecast(forecastData as any);
+    const forecast = await storage.createForecast(forecastData);
 
     return res.status(201).json({
       success: true,
@@ -117,10 +117,12 @@ export async function generateForecast(req: AuthRequest, res: Response) {
       importParityPrice: 0,
       demandIndex: 0,
       ...result,
-    } as any);
+    });
 
+    // Don't await this - let it run in the background
     storage.incrementForecastCount(req.userId!).catch(() => {});
-
+    
+    // Don't await this - let it run in the background
     onForecastCreated(terminalId, forecast).catch((err) =>
       console.error(`[Notify] Error in forecast notification: ${err.message}`)
     );
@@ -216,8 +218,9 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       refineryInfluenceScore: 0,
       importParityPrice: 0,
       demandIndex: 0,
-    } as any);
+    });
 
+    // Don't await this - let it run in the background
     onForecastCreated(terminalId, forecast).catch((err) =>
       console.error(`[Notify] Error in score notification: ${err.message}`)
     );
