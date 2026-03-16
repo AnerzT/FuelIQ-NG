@@ -1,8 +1,8 @@
+// server/db.ts
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../shared/schema.js';
 
-// Database connection with error handling
 let db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
@@ -15,7 +15,7 @@ export async function getDb() {
 
   try {
     const client = postgres(process.env.DATABASE_URL, {
-      max: 1, // Connection pool size for serverless
+      max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
     });
@@ -32,7 +32,6 @@ export async function getDb() {
 export async function testDatabaseConnection() {
   try {
     const db = await getDb();
-    // Simple test query
     await db.execute('SELECT 1');
     return 'connected';
   } catch (error) {
