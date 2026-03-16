@@ -220,32 +220,15 @@ export const hedgeRecommendations = pgTable("hedge_recommendations", {
   rationale: text("rationale"),
   createdAt: timestamp("created_at").defaultNow(),
 });
-// Fix boolean type issues by extending the insert schemas
-export const insertForecastsSchema = createInsertSchema(forecasts).extend({
-  // Add explicit boolean handling for any boolean fields in forecasts table
-  // Example: if you have boolean fields, add them like this:
-  // isActive: z.boolean().optional(),
-});
 
-export const insertMarketSignalsSchema = createInsertSchema(marketSignals).extend({
-  // Handle boolean fields in marketSignals
-});
-
-export const insertRefineryUpdatesSchema = createInsertSchema(refineryUpdates).extend({
-  // Handle boolean fields in refineryUpdates
-});
-
-export const insertRegulationUpdatesSchema = createInsertSchema(regulationUpdates).extend({
-  // Handle boolean fields in regulationUpdates
-});
 // ─── INSERT SCHEMAS ───────────────────────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
   email: true,
 });
+
 export const insertForecastSchema = createInsertSchema(forecasts);
-export const insertSignalSchema = createInsertSchema(marketSignals);
 export const insertMarketSignalSchema = createInsertSchema(marketSignals);
 export const insertRefineryUpdateSchema = createInsertSchema(refineryUpdates);
 export const insertRegulationUpdateSchema = createInsertSchema(regulationUpdates);
@@ -308,7 +291,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Forecast = typeof forecasts.$inferSelect;
 export type InsertForecast = z.infer<typeof insertForecastSchema>;
 export type Signal = typeof marketSignals.$inferSelect;
-export type InsertSignal = z.infer<typeof insertSignalSchema>;
+export type InsertSignal = z.infer<typeof insertMarketSignalSchema>;
 export type Terminal = typeof terminals.$inferSelect;
 export type MarketSignal = typeof marketSignals.$inferSelect;
 export type PriceHistoryEntry = typeof priceHistory.$inferSelect;
