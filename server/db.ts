@@ -27,7 +27,7 @@ export async function getDb() {
 export async function testDatabaseConnection() {
   try {
     const db = await getDb();
-    await db.execute(sql`SELECT 1`);  
+     await db.execute('SELECT 1' as any);
     console.log('✅ Database connected');
     return 'connected';
   } catch (error) {
