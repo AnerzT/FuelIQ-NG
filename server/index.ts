@@ -145,32 +145,32 @@ export async function createApp(): Promise<Express> {
   return app;
 }
 
-// For Vercel serverless, export the app directly
+// For Vercel serverless
+let initializedApp: Express | null = null;
+
 const app = express();
 
-// Initialize in background (non-blocking)
-createApp().then(createdApp => {
-  // Copy all routes/middleware from createdApp to app
-  app.use(createdApp);
-  console.log('✅ App initialized successfully');
-}).catch(err => {
-  console.error('❌ Failed to initialize app:', err);
-  app.use('*', (req: Request, res: Response) => {
-    res.status(500).json({ success: false, message: 'Application failed to initialize' });
-  });
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  if (!initializedApp) {
+    try {
+      initializedApp = await createApp();
+    } catch (err) {
+      res.status(500).json({ success: false, message: 'Failed to initialize' });
+      return;
+    }
+  }
+  initializedApp(req, res, next);
 });
 
-// Export the app for Vercel (synchronous, always defined)
 export default app;
 
-// For local development, start the server
+// For local development
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
   createApp().then(initializedApp => {
     const httpServer = createServer(initializedApp);
     httpServer.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
-      console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
     });
   }).catch(err => {
     console.error('❌ Failed to start server:', err);
