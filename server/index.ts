@@ -1,6 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import { createServer } from "http";
 import { registerRoutes } from "./routes.js";
-import { storage } from "./storage.js";
 import { testDatabaseConnection } from "./db.js"; // Assuming you have this
 
 // ============================================
@@ -96,8 +96,9 @@ export async function createApp(): Promise<Express> {
       console.log('✅ Database connected successfully');
     }
 
-    // Register all API routes
-    await registerRoutes(app);
+    // Create HTTP server and register routes
+    const httpServer = createServer(app);
+    await registerRoutes(httpServer, app);
     console.log('✅ Routes registered successfully');
 
   } catch (error) {
@@ -185,7 +186,8 @@ export default app;
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
   createApp().then(app => {
-    app.listen(PORT, () => {
+    const httpServer = createServer(app);
+    httpServer.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
     });
