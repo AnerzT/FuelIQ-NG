@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import {
   users,
   terminals,
@@ -134,23 +134,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async incrementForecastCount(userId: string): Promise<void> {
-    const user = await this.getUser(userId);
-    if (user) {
-      await db.update(users)
-        .set({ forecastsUsedToday: (user.forecastsUsedToday || 0) + 1 })
-        .where(eq(users.id, userId));
-    }
+    await db.update(users)
+      .set({ 
+        forecastsUsedToday: sql`${users.forecastsUsedToday} + 1` 
+      })
+      .where(eq(users.id, userId));
   }
 
   async resetForecastCount(userId: string): Promise<void> {
     await db.update(users)
-      .set({ forecastsUsedToday: 0, forecastDayResetDate: new Date() })
+      .set({ 
+        forecastsUsedToday: 0, 
+        forecastDayResetDate: new Date() 
+      })
       .where(eq(users.id, userId));
   }
 
   async resetSmsCount(userId: string): Promise<void> {
     await db.update(users)
-      .set({ smsAlertsUsedThisWeek: 0, smsWeekResetDate: new Date() })
+      .set({ 
+        smsAlertsUsedThisWeek: 0, 
+        smsWeekResetDate: new Date() 
+      })
       .where(eq(users.id, userId));
   }
 
@@ -327,8 +332,7 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(depotPrices.productType, productType));
     }
     
-    const results = await query.orderBy(desc(depotPrices.updatedAt));
-    return results;
+    return await query.orderBy(desc(depotPrices.updatedAt));
   }
 
   async createDepotPrice(price: any): Promise<DepotPrice> {
