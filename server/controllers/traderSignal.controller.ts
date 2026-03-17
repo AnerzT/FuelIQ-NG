@@ -1,96 +1,18 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
 import type { AuthRequest } from "../middleware/auth.js";
-import { PRODUCT_TYPES } from "../../shared/schema.js";
-
-const BULLISH_KEYWORDS = ["buy", "load", "scarcity", "shortage", "rising", "increase", "hike", "surge", "tight", "limited"];
-const BEARISH_KEYWORDS = ["sell", "drop", "excess", "surplus", "falling", "decrease", "glut", "oversupply", "dump", "cheap"];
-const NEUTRAL_KEYWORDS = ["stable", "steady", "hold", "unchanged", "flat", "normal", "moderate"];
-
-function analyzeSentiment(message: string): { sentimentScore: number; impactScore: number; keywords: string[] } {
-  const lower = message.toLowerCase();
-  const detectedKeywords: string[] = [];
-  let score = 0;
-
-  for (const kw of BULLISH_KEYWORDS) {
-    if (lower.includes(kw)) {
-      score += 1;
-      detectedKeywords.push(kw);
-    }
-  }
-  for (const kw of BEARISH_KEYWORDS) {
-    if (lower.includes(kw)) {
-      score -= 1;
-      detectedKeywords.push(kw);
-    }
-  }
-  for (const kw of NEUTRAL_KEYWORDS) {
-    if (lower.includes(kw)) {
-      detectedKeywords.push(kw);
-    }
-  }
-
-  const maxMagnitude = Math.max(BULLISH_KEYWORDS.length, BEARISH_KEYWORDS.length);
-  const sentimentScore = maxMagnitude > 0 ? Math.max(-1, Math.min(1, score / 3)) : 0;
-  const impactScore = Math.min(1, detectedKeywords.length / 5);
-
-  return {
-    sentimentScore: Math.round(sentimentScore * 100) / 100,
-    impactScore: Math.round(impactScore * 100) / 100,
-    keywords: detectedKeywords,
-  };
-}
-
-function detectProduct(message: string): string | null {
-  const lower = message.toLowerCase();
-  for (const pt of PRODUCT_TYPES) {
-    if (lower.includes(pt.toLowerCase())) return pt;
-  }
-  if (lower.includes("petrol") || lower.includes("gasoline") || lower.includes("fuel")) return "PMS";
-  if (lower.includes("diesel")) return "AGO";
-  if (lower.includes("kerosene") || lower.includes("jet fuel") || lower.includes("aviation")) return "JET_A1";
-  if (lower.includes("cooking gas") || lower.includes("lpg") || lower.includes("propane")) return "LPG";
-  return null;
-}
-
-async function detectTerminal(message: string): Promise<{ terminalId: string | null; terminalName: string | null }> {
-  const allTerminals = await storage.getTerminals();
-  const lower = message.toLowerCase();
-  for (const t of allTerminals) {
-    const tCode = (t as any).code ?? "";
-    if (lower.includes(t.name.toLowerCase()) || lower.includes(tCode.toLowerCase())) {
-      return { terminalId: String(t.id), terminalName: t.name };
-    }
-  }
-  return { terminalId: null, terminalName: null };
-}
 
 export async function getTraderSignals(req: AuthRequest, res: Response) {
   try {
-    const { terminalId, limit } = req.query;
-    const signals = await storage.getTraderSignals(
-      terminalId as string | undefined,
-      limit ? parseInt(limit as string) : undefined
-    );
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
 
-    let avgSentiment = 0;
-    let avgImpact = 0;
-    if (signals.length > 0) {
-      avgSentiment = signals.reduce((sum, s) => sum + ((s as any).sentimentScore || 0), 0) / signals.length;
-      avgImpact = signals.reduce((sum, s) => sum + ((s as any).impactScore || 0), 0) / signals.length;
-    }
-
+    // Fixed: Now passing only one argument (limit)
+    const signals = await storage.getTraderSignals(safeLimit);
+    
     return res.json({
       success: true,
-      data: {
-        signals,
-        sentiment: {
-          average: Math.round(avgSentiment * 100) / 100,
-          label: avgSentiment > 0.2 ? "Bullish" : avgSentiment < -0.2 ? "Bearish" : "Neutral",
-          avgImpact: Math.round(avgImpact * 100) / 100,
-          count: signals.length,
-        },
-      },
+      data: signals,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -99,45 +21,189 @@ export async function getTraderSignals(req: AuthRequest, res: Response) {
 
 export async function submitTraderSignal(req: AuthRequest, res: Response) {
   try {
-    const userId = req.userId!;
-    const { message, terminalId, productType } = req.body;
-    if (!message) {
-      return res.status(400).json({ success: false, message: "message is required" });
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const { sentimentScore, impactScore, keywords } = analyzeSentiment(message);
-    const detectedProduct = detectProduct(message);
-    const { terminalId: detectedTerminalId, terminalName: detectedTerminalName } = await detectTerminal(message);
-
-    const resolvedTerminalId = terminalId || detectedTerminalId || "1";
-
+    const { 
+      message, 
+      sentimentScore, 
+      impactScore, 
+      terminalId, 
+      productType,
+      detectedTerminal,
+      detectedProduct,
+      keywords 
+    } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Message is required" 
+      });
+    }
+    
+    // Validate terminal if provided
+    if (terminalId) {
+      const terminal = await storage.getTerminal(terminalId);
+      if (!terminal) {
+        return res.status(404).json({ success: false, message: "Terminal not found" });
+      }
+    }
+    
     const signal = await storage.createTraderSignal({
-      userId: Number(userId),
+      userId,
       message,
-      sentimentScore,
-      impactScore,
-      terminalId: String(resolvedTerminalId),
-      productType: productType || detectedProduct || "PMS",
-      detectedTerminal: detectedTerminalName,
-      detectedProduct: detectedProduct,
-      keywords,
-      action: sentimentScore > 0.2 ? "BUY" : sentimentScore < -0.2 ? "SELL" : "HOLD",
-      confidence: Math.round(impactScore * 100),
-      notes: null,
-    } as any);
-
+      sentimentScore: sentimentScore ? Number(sentimentScore) : null,
+      impactScore: impactScore ? Number(impactScore) : null,
+      terminalId: terminalId || null,
+      productType: productType || "PMS",
+      detectedTerminal: detectedTerminal || null,
+      detectedProduct: detectedProduct || null,
+      keywords: keywords || null,
+    });
+    
     return res.status(201).json({
       success: true,
-      data: {
-        signal,
-        analysis: {
-          sentimentScore,
-          impactScore,
-          keywords,
-          detectedProduct,
-          detectedTerminal: detectedTerminalName,
-        },
-      },
+      message: "Trader signal submitted successfully",
+      data: signal,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getTraderSignalsByTerminal(req: AuthRequest, res: Response) {
+  try {
+    const { terminalId } = req.params;
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 20;
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    
+    const terminal = await storage.getTerminal(terminalId);
+    if (!terminal) {
+      return res.status(404).json({ success: false, message: "Terminal not found" });
+    }
+    
+    // Fixed: Now using the correct method with proper arguments
+    const signals = await storage.getTraderSignalsByTerminal(terminalId, safeLimit);
+    
+    return res.json({
+      success: true,
+      data: signals,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getTraderSignalById(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    
+    // Since we don't have a direct getTraderSignalById method,
+    // we'll get all signals and filter (inefficient but works for now)
+    const allSignals = await storage.getTraderSignals(100);
+    const signal = allSignals.find(s => s.id === id);
+    
+    if (!signal) {
+      return res.status(404).json({ success: false, message: "Trader signal not found" });
+    }
+    
+    return res.json({
+      success: true,
+      data: signal,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getTraderSignalsByUser(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
+    
+    // Get all signals and filter by userId
+    const allSignals = await storage.getTraderSignals(safeLimit * 2); // Get more to account for filtering
+    const userSignals = allSignals.filter(s => s.userId === userId).slice(0, safeLimit);
+    
+    return res.json({
+      success: true,
+      data: userSignals,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getRecentTraderSignals(req: AuthRequest, res: Response) {
+  try {
+    const hours = typeof req.query.hours === "string" ? parseInt(req.query.hours, 10) : 24;
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 20;
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    
+    const signals = await storage.getTraderSignals(safeLimit * 2);
+    
+    // Filter by recent time
+    const cutoffTime = new Date();
+    cutoffTime.setHours(cutoffTime.getHours() - hours);
+    
+    const recentSignals = signals
+      .filter(s => new Date(s.createdAt) >= cutoffTime)
+      .slice(0, safeLimit);
+    
+    return res.json({
+      success: true,
+      data: recentSignals,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getHighImpactTraderSignals(req: AuthRequest, res: Response) {
+  try {
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 20;
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    
+    const signals = await storage.getTraderSignals(safeLimit * 3);
+    
+    // Filter by high impact (impactScore > 70 or sentimentScore > 80)
+    const highImpactSignals = signals
+      .filter(s => (s.impactScore && s.impactScore > 70) || (s.sentimentScore && s.sentimentScore > 80))
+      .slice(0, safeLimit);
+    
+    return res.json({
+      success: true,
+      data: highImpactSignals,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getTraderSignalsByProduct(req: AuthRequest, res: Response) {
+  try {
+    const { productType } = req.params;
+    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 20;
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    
+    const signals = await storage.getTraderSignals(safeLimit * 2);
+    
+    // Filter by product type
+    const productSignals = signals
+      .filter(s => s.productType === productType)
+      .slice(0, safeLimit);
+    
+    return res.json({
+      success: true,
+      data: productSignals,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
