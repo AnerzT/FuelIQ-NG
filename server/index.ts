@@ -145,26 +145,37 @@ export async function createApp(): Promise<Express> {
   return app;
 }
 
-// For Vercel serverless
-let initializedApp: Express | null = null;
+// ============================================
+// For Vercel serverless - direct handler
+// ============================================
 
-const app = express();
+let cachedApp: Express | null = null;
 
-app.use(async (req: Request, res: Response, next: NextFunction) => {
-  if (!initializedApp) {
-    try {
-      initializedApp = await createApp();
-    } catch (err) {
-      res.status(500).json({ success: false, message: 'Failed to initialize' });
-      return;
-    }
+async function getApp(): Promise<Express> {
+  if (!cachedApp) {
+    cachedApp = await createApp();
+    console.log('✅ App initialized for Vercel');
   }
-  initializedApp(req, res, next);
-});
+  return cachedApp;
+}
 
-export default app;
+// Vercel serverless handler
+export default async function handler(req: Request, res: Response) {
+  try {
+    const app = await getApp();
+    return app(req, res);
+  } catch (err) {
+    console.error('❌ Handler error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+}
 
+// ============================================
 // For local development
+// ============================================
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
   createApp().then(initializedApp => {
