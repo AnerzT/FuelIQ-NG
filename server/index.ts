@@ -1,52 +1,29 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer } from "http";
 import { registerRoutes } from "./routes.js";
-import { testDatabaseConnection } from "./db.js"; // Assuming you have this
+import { testDatabaseConnection } from "./db.js";
 
 // ============================================
-// GLOBAL ERROR HANDLERS (catch everything)
+// GLOBAL ERROR HANDLERS
 // ============================================
-
-// Catch uncaught exceptions (synchronous errors)
 process.on('uncaughtException', (err: Error) => {
-  console.error('🔥 UNCAUGHT EXCEPTION:', {
-    name: err.name,
-    message: err.message,
-    stack: err.stack,
-    timestamp: new Date().toISOString()
-  });
-  
-  // In development, you might want to exit, but in production serverless,
-  // we log and let the instance die gracefully
-  if (process.env.NODE_ENV === 'development') {
-    process.exit(1);
-  }
+  console.error('🔥 UNCAUGHT EXCEPTION:', err);
 });
 
-// Catch unhandled promise rejections (asynchronous errors)
-process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-  console.error('⚠️ UNHANDLED REJECTION:', {
-    reason: reason instanceof Error ? {
-      name: reason.name,
-      message: reason.message,
-      stack: reason.stack
-    } : reason,
-    timestamp: new Date().toISOString()
-  });
+process.on('unhandledRejection', (reason: any) => {
+  console.error('⚠️ UNHANDLED REJECTION:', reason);
 });
 
-// Handle SIGTERM gracefully (Vercel sends this)
 process.on('SIGTERM', () => {
-  console.log('📡 SIGTERM received, cleaning up...');
-  // Close any open connections here
+  console.log('📡 SIGTERM received');
   process.exit(0);
 });
 
 // ============================================
 // CREATE EXPRESS APP
 // ============================================
-
 export async function createApp(): Promise<Express> {
+  console.log('📦 Creating Express app...');
   const app = express();
 
   // Basic middleware
@@ -55,90 +32,72 @@ export async function createApp(): Promise<Express> {
 
   // Request logging middleware
   app.use((req: Request, res: Response, next: NextFunction) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    console.log(`📨 ${req.method} ${req.path}`);
     next();
   });
 
-  // Health check endpoint (always works, even before DB)
+  // Health check endpoint
   app.get('/api/health', (req: Request, res: Response) => {
-    res.json({ 
-      status: 'ok', 
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime()
-    });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Detailed health check with DB status
+  // Detailed health check
   app.get('/api/health/detailed', async (req: Request, res: Response) => {
     try {
       const dbStatus = await testDatabaseConnection?.() || 'unknown';
       res.json({
         status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
         database: dbStatus,
         environment: process.env.NODE_ENV
       });
     } catch (error) {
-      res.status(500).json({
-        status: 'error',
-        timestamp: new Date().toISOString(),
-        database: 'disconnected',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json({ status: 'error', database: 'disconnected' });
     }
   });
 
   try {
-    // Test database connection before starting
+    // Test database connection
     if (testDatabaseConnection) {
       await testDatabaseConnection();
-      console.log('✅ Database connected successfully');
+      console.log('✅ Database connected');
     }
 
     // Create HTTP server and register routes
+    console.log('🔄 Creating HTTP server...');
     const httpServer = createServer(app);
+    
+    console.log('🔄 Registering routes...');
     await registerRoutes(httpServer, app);
     console.log('✅ Routes registered successfully');
 
+    // List all registered routes (for debugging)
+    console.log('📋 Registered routes:');
+    app._router?.stack?.forEach((layer: any) => {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
+        console.log(`   ${methods} ${layer.route.path}`);
+      }
+    });
+
   } catch (error) {
     console.error('❌ Failed to initialize app:', error);
-    // Don't throw - let the app start with minimal functionality
-    // The error endpoint below will handle requests
   }
 
-  // ============================================
-  // ERROR HANDLING MIDDLEWARE
-  // ============================================
-
-  // 404 handler for undefined routes
+  // 404 handler
   app.use((req: Request, res: Response) => {
+    console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
     res.status(404).json({ 
       success: false, 
       message: `Route not found: ${req.method} ${req.path}` 
     });
   });
 
-  // Global error handling middleware (must be last)
+  // Error handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    console.error('❌ Express Error:', {
-      path: req.path,
-      method: req.method,
-      error: {
-        name: err.name,
-        message: err.message,
-        stack: err.stack
-      },
-      timestamp: new Date().toISOString()
-    });
-
-    // Don't expose internal error details in production
-    const isProd = process.env.NODE_ENV === 'production';
-    
+    console.error('❌ Express Error:', err);
     res.status(err.status || 500).json({
       success: false,
-      message: isProd ? 'Internal server error' : err.message,
-      ...(isProd ? {} : { stack: err.stack })
+      message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
   });
 
@@ -146,13 +105,13 @@ export async function createApp(): Promise<Express> {
 }
 
 // ============================================
-// For Vercel serverless - direct handler
+// For Vercel serverless
 // ============================================
-
 let cachedApp: Express | null = null;
 
 async function getApp(): Promise<Express> {
   if (!cachedApp) {
+    console.log('🚀 Initializing app for Vercel...');
     cachedApp = await createApp();
     console.log('✅ App initialized for Vercel');
   }
@@ -161,6 +120,7 @@ async function getApp(): Promise<Express> {
 
 // Vercel serverless handler
 export default async function handler(req: Request, res: Response) {
+  console.log(`🎯 Vercel handler received: ${req.method} ${req.url}`);
   try {
     const app = await getApp();
     return app(req, res);
@@ -178,10 +138,11 @@ export default async function handler(req: Request, res: Response) {
 // ============================================
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
-  createApp().then(initializedApp => {
-    const httpServer = createServer(initializedApp);
+  createApp().then(app => {
+    const httpServer = createServer(app);
     httpServer.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
+      console.log(`🔗 Test register: http://localhost:${PORT}/api/auth/register`);
     });
   }).catch(err => {
     console.error('❌ Failed to start server:', err);
