@@ -4,9 +4,14 @@ import type { AuthRequest } from "../middleware/auth.js";
 
 export async function getDepots(req: AuthRequest, res: Response) {
   try {
-    const terminalId = req.query.terminalId as string | undefined;
-    const depots = await storage.getDepots(terminalId);
-    return res.json({ success: true, data: depots });
+    const { terminalId } = req.query;
+    
+    const depots = await storage.getDepots(terminalId as string | undefined);
+    
+    return res.json({
+      success: true,
+      data: depots,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -14,11 +19,17 @@ export async function getDepots(req: AuthRequest, res: Response) {
 
 export async function getDepot(req: AuthRequest, res: Response) {
   try {
-    const depot = await storage.getDepot(req.params.id as string);
+    const { id } = req.params;
+    
+    const depot = await storage.getDepot(id);
     if (!depot) {
       return res.status(404).json({ success: false, message: "Depot not found" });
     }
-    return res.json({ success: true, data: depot });
+    
+    return res.json({
+      success: true,
+      data: depot,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -27,22 +38,31 @@ export async function getDepot(req: AuthRequest, res: Response) {
 export async function createDepot(req: AuthRequest, res: Response) {
   try {
     const { name, terminalId, owner, active } = req.body;
+    
     if (!name || !terminalId || !owner) {
-      return res.status(400).json({ success: false, message: "name, terminalId, and owner are required" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required fields: name, terminalId, owner" 
+      });
     }
-    const terminal = await storage.getTerminal(String(terminalId));
+    
+    const terminal = await storage.getTerminal(terminalId);
     if (!terminal) {
       return res.status(404).json({ success: false, message: "Terminal not found" });
     }
+    
     const depot = await storage.createDepot({
       name,
-      location: "Nigeria",
-      terminalId: String(terminalId),
+      terminalId,
       owner,
-      active: active ?? true,
-      isActive: active ?? true,
-    } as any);
-    return res.status(201).json({ success: true, data: depot });
+      active: active !== undefined ? active : true,
+    });
+    
+    return res.status(201).json({
+      success: true,
+      message: "Depot created successfully",
+      data: depot,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -50,48 +70,16 @@ export async function createDepot(req: AuthRequest, res: Response) {
 
 export async function getDepotPrices(req: AuthRequest, res: Response) {
   try {
-    const depotId = req.query.depotId as string | undefined;
-    const productType = req.query.productType as string | undefined;
-    const terminalId = req.query.terminalId as string | undefined;
-    let prices = await storage.getDepotPrices(depotId, productType);
-    if (terminalId) {
-      prices = prices.filter((p) => p.terminalId === terminalId);
-    }
-
-    const lowestByProduct: Record<string, { price: number; depotName: string }> = {};
-    const highestByProduct: Record<string, { price: number; depotName: string }> = {};
-    for (const p of prices) {
-      const pt = p.productType;
-      if (!lowestByProduct[pt] || p.price < lowestByProduct[pt].price) {
-        lowestByProduct[pt] = { price: p.price, depotName: p.depotName || "" };
-      }
-      if (!highestByProduct[pt] || p.price > highestByProduct[pt].price) {
-        highestByProduct[pt] = { price: p.price, depotName: p.depotName || "" };
-      }
-    }
-
-    const spreads: Record<string, { spread: number; arbitragePercent: number }> = {};
-    for (const pt of Object.keys(lowestByProduct)) {
-      if (highestByProduct[pt]) {
-        const spread = highestByProduct[pt].price - lowestByProduct[pt].price;
-        const arbitragePercent = lowestByProduct[pt].price > 0
-          ? (spread / lowestByProduct[pt].price) * 100
-          : 0;
-        spreads[pt] = {
-          spread: Math.round(spread * 100) / 100,
-          arbitragePercent: Math.round(arbitragePercent * 100) / 100,
-        };
-      }
-    }
-
+    const { depotId, productType } = req.query;
+    
+    const prices = await storage.getDepotPrices(
+      depotId as string | undefined,
+      productType as string | undefined
+    );
+    
     return res.json({
       success: true,
-      data: {
-        prices,
-        lowestByProduct,
-        highestByProduct,
-        spreads,
-      },
+      data: prices,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -101,21 +89,31 @@ export async function getDepotPrices(req: AuthRequest, res: Response) {
 export async function createDepotPrice(req: AuthRequest, res: Response) {
   try {
     const { depotId, productType, price } = req.body;
-    if (!depotId || !productType || price === undefined) {
-      return res.status(400).json({ success: false, message: "depotId, productType, and price are required" });
+    
+    if (!depotId || !productType || !price) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required fields: depotId, productType, price" 
+      });
     }
-    const depot = await storage.getDepot(String(depotId));
+    
+    const depot = await storage.getDepot(depotId);
     if (!depot) {
       return res.status(404).json({ success: false, message: "Depot not found" });
     }
+    
     const depotPrice = await storage.createDepotPrice({
-      depotId: String(depotId),
+      depotId,
       productType,
-      price: Number(price),
+      price,
       updatedAt: new Date(),
-      recordedAt: new Date(),
-    } as any);
-    return res.status(201).json({ success: true, data: depotPrice });
+    });
+    
+    return res.status(201).json({
+      success: true,
+      message: "Depot price created successfully",
+      data: depotPrice,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -125,14 +123,78 @@ export async function updateDepotPrice(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const { price } = req.body;
-    if (price === undefined) {
-      return res.status(400).json({ success: false, message: "price is required" });
+    
+    if (!price) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Price is required" 
+      });
     }
-    const updated = await storage.updateDepotPrice(String(id), Number(price));
-    if (!updated) {
+    
+    const updatedPrice = await storage.updateDepotPrice(id, price);
+    if (!updatedPrice) {
       return res.status(404).json({ success: false, message: "Depot price not found" });
     }
-    return res.json({ success: true, data: updated });
+    
+    return res.json({
+      success: true,
+      message: "Depot price updated successfully",
+      data: updatedPrice,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getDepotPriceHistory(req: AuthRequest, res: Response) {
+  try {
+    const { depotId } = req.params;
+    const { days = 30 } = req.query;
+    
+    const depot = await storage.getDepot(depotId);
+    if (!depot) {
+      return res.status(404).json({ success: false, message: "Depot not found" });
+    }
+    
+    const prices = await storage.getDepotPrices(depotId);
+    
+    // Sort by date and limit to requested days
+    const sortedPrices = prices
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, Number(days));
+    
+    return res.json({
+      success: true,
+      data: sortedPrices,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getDepotPriceByProduct(req: AuthRequest, res: Response) {
+  try {
+    const { depotId, productType } = req.params;
+    
+    const depot = await storage.getDepot(depotId);
+    if (!depot) {
+      return res.status(404).json({ success: false, message: "Depot not found" });
+    }
+    
+    const prices = await storage.getDepotPrices(depotId, productType);
+    const latestPrice = prices.length > 0 ? prices[0] : null;
+    
+    if (!latestPrice) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `No price found for product ${productType} at this depot` 
+      });
+    }
+    
+    return res.json({
+      success: true,
+      data: latestPrice,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
