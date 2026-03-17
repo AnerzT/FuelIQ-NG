@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
   users,
   terminals,
@@ -134,9 +134,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async incrementForecastCount(userId: string): Promise<void> {
-    await db.update(users)
-      .set({ forecastsUsedToday: sql`${users.forecastsUsedToday} + 1` })
-      .where(eq(users.id, userId));
+    const user = await this.getUser(userId);
+    if (user) {
+      await db.update(users)
+        .set({ forecastsUsedToday: (user.forecastsUsedToday || 0) + 1 })
+        .where(eq(users.id, userId));
+    }
   }
 
   async resetForecastCount(userId: string): Promise<void> {
@@ -172,19 +175,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSubscribedUsers(): Promise<User[]> {
-    return await db.select()
-      .from(users)
-      .where(sql`${users.notificationPrefs}->>'smsEnabled' = 'true' OR ${users.notificationPrefs}->>'whatsappEnabled' = 'true'`);
+    const allUsers = await this.getAllUsers();
+    return allUsers.filter(user => {
+      const prefs = user.notificationPrefs as any;
+      return prefs?.smsEnabled === true || prefs?.whatsappEnabled === true;
+    });
   }
 
   async createNotificationLog(userId: string, channel: string, message: string, alertType: string = "general"): Promise<any> {
     // Since notification_logs might not exist in schema yet, we'll return a mock
     console.log(`📝 Notification log: ${userId} - ${channel} - ${alertType}`);
-    return { id: "mock", userId, channel, message, alertType, createdAt: new Date() };
+    return { 
+      id: "mock-" + Date.now(), 
+      userId, 
+      channel, 
+      message, 
+      alertType, 
+      createdAt: new Date() 
+    };
   }
 
   async getNotificationLogs(userId: string, limit: number = 50): Promise<any[]> {
-    // Return empty array for now
+    // Return empty array for now - implement when table exists
     return [];
   }
 
@@ -315,7 +327,8 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(depotPrices.productType, productType));
     }
     
-    return await query.orderBy(desc(depotPrices.updatedAt));
+    const results = await query.orderBy(desc(depotPrices.updatedAt));
+    return results;
   }
 
   async createDepotPrice(price: any): Promise<DepotPrice> {
