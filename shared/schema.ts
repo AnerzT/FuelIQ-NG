@@ -1,223 +1,171 @@
-import { pgTable, text, serial, integer, timestamp, boolean, doublePrecision, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, boolean, doublePrecision, jsonb, sql } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ─── USERS ───────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  email: text("email").unique(),
-  name: text("name"),
+  role: text("role").notNull().default("marketer"),
   phone: text("phone"),
   whatsappPhone: text("whatsapp_phone"),
-  notificationPrefs: jsonb("notification_prefs"),
-  role: text("role").default("user"),
-  subscriptionTier: text("subscription_tier").default("free"),
+  notificationPrefs: jsonb("notification_prefs").default(sql`'{"smsEnabled": false, "priceAlerts": true, "morningDigest": false, "forecastAlerts": true, "refineryAlerts": true, "whatsappEnabled": false}'::jsonb`),
+  subscriptionTier: text("subscription_tier").notNull().default("free"),
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
-  assignedTerminalId: text("assigned_terminal_id"),
-  forecastsUsedToday: integer("forecasts_used_today").default(0),
-  forecastDayResetDate: timestamp("forecast_day_reset_date"),
-  smsAlertsUsedThisWeek: integer("sms_alerts_used_this_week").default(0),
+  smsAlertsUsedThisWeek: integer("sms_alerts_used_this_week").notNull().default(0),
   smsWeekResetDate: timestamp("sms_week_reset_date"),
+  forecastsUsedToday: integer("forecasts_used_today").notNull().default(0),
+  forecastDayResetDate: timestamp("forecast_day_reset_date"),
+  assignedTerminalId: text("assigned_terminal_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── TERMINALS ───────────────────────────────────────────────────────────────
 export const terminals = pgTable("terminals", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  code: text("code").unique(),
-  state: text("state"),
-  location: text("location").notNull(),
-  region: text("region"),
-  capacity: doublePrecision("capacity"),
-  active: boolean("active").default(true),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
+  code: text("code").notNull().unique(),
+  state: text("state").notNull(),
+  active: boolean("active").notNull().default(true),
 });
 
 // ─── FORECASTS ───────────────────────────────────────────────────────────────
 export const forecasts = pgTable("forecasts", {
-  id: serial("id").primaryKey(),
-  terminalId: text("terminal_id").notNull(),
-  productType: text("product_type").notNull(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  terminalId: text("terminal_id").notNull().references(() => terminals.id),
+  productType: text("product_type").notNull().default("PMS"),
   expectedMin: doublePrecision("expected_min").notNull(),
   expectedMax: doublePrecision("expected_max").notNull(),
-  depotPrice: doublePrecision("depot_price").default(0),
-  refineryInfluenceScore: doublePrecision("refinery_score").default(0),
-  importParityPrice: doublePrecision("import_parity").default(0),
-  demandIndex: doublePrecision("demand_index").default(0),
-  bias: text("bias").notNull(),
-  confidence: doublePrecision("confidence").notNull(),
+  bias: text("bias").notNull().default("neutral"),
+  confidence: integer("confidence").notNull(),
   suggestedAction: text("suggested_action").notNull(),
+  depotPrice: doublePrecision("depot_price"),
+  refineryInfluenceScore: doublePrecision("refinery_influence_score"),
+  importParityPrice: doublePrecision("import_parity_price"),
+  demandIndex: doublePrecision("demand_index"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── MARKET SIGNALS ──────────────────────────────────────────────────────────
 export const marketSignals = pgTable("market_signals", {
-  id: serial("id").primaryKey(),
-  terminalId: text("terminal_id").notNull(),
-  productType: text("product_type").default("PMS"),
-  signalType: text("signal_type"),
-  value: doublePrecision("value"),
-  description: text("description"),
-  vesselActivity: text("vessel_activity"),
-  truckQueue: text("truck_queue"),
-  nnpcSupply: text("nnpc_supply"),
-  fxPressure: text("fx_pressure"),
-  policyRisk: text("policy_risk"),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  terminalId: text("terminal_id").notNull().references(() => terminals.id),
+  productType: text("product_type").notNull().default("PMS"),
+  vesselActivity: text("vessel_activity").notNull(),
+  truckQueue: text("truck_queue").notNull(),
+  nnpcSupply: text("nnpc_supply").notNull(),
+  fxPressure: text("fx_pressure").notNull(),
+  policyRisk: text("policy_risk").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── PRICE HISTORY ───────────────────────────────────────────────────────────
 export const priceHistory = pgTable("price_history", {
-  id: serial("id").primaryKey(),
-  terminalId: text("terminal_id").notNull(),
-  productType: text("product_type").notNull(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  terminalId: text("terminal_id").notNull().references(() => terminals.id),
+  productType: text("product_type").notNull().default("PMS"),
+  date: timestamp("date").notNull(),
   price: doublePrecision("price").notNull(),
-  source: text("source"),
-  date: timestamp("date").defaultNow(),
-  recordedAt: timestamp("recorded_at").defaultNow(),
 });
 
 // ─── DEPOTS ──────────────────────────────────────────────────────────────────
 export const depots = pgTable("depots", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  location: text("location").notNull(),
-  region: text("region"),
-  terminalId: text("terminal_id"),
-  owner: text("owner"),
-  active: boolean("active").default(true),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
+  terminalId: text("terminal_id").notNull().references(() => terminals.id),
+  owner: text("owner").notNull(),
+  active: boolean("active").notNull().default(true),
 });
 
 // ─── DEPOT PRICES ─────────────────────────────────────────────────────────────
 export const depotPrices = pgTable("depot_prices", {
-  id: serial("id").primaryKey(),
-  depotId: text("depot_id").notNull(),
-  productType: text("product_type").notNull(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  depotId: text("depot_id").notNull().references(() => depots.id),
+  productType: text("product_type").notNull().default("PMS"),
   price: doublePrecision("price").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
-  recordedAt: timestamp("recorded_at").defaultNow(),
 });
 
 // ─── REFINERY UPDATES ─────────────────────────────────────────────────────────
 export const refineryUpdates = pgTable("refinery_updates", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   refineryName: text("refinery_name").notNull(),
-  status: text("status").notNull(),
-  operationalStatus: text("operational_status"),
-  outputLevel: doublePrecision("output_level"),
-  productionCapacity: doublePrecision("production_capacity"),
-  pmsOutputEstimate: doublePrecision("pms_output_estimate"),
-  dieselOutputEstimate: doublePrecision("diesel_output_estimate"),
-  jetOutputEstimate: doublePrecision("jet_output_estimate"),
-  notes: text("notes"),
-  reportedAt: timestamp("reported_at").defaultNow(),
+  productionCapacity: doublePrecision("production_capacity").notNull(),
+  operationalStatus: text("operational_status").notNull(),
+  pmsOutputEstimate: doublePrecision("pms_output_estimate").notNull(),
+  dieselOutputEstimate: doublePrecision("diesel_output_estimate").notNull(),
+  jetOutputEstimate: doublePrecision("jet_output_estimate").notNull(),
+  updateSource: text("update_source").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── REGULATION UPDATES ───────────────────────────────────────────────────────
 export const regulationUpdates = pgTable("regulation_updates", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
-  description: text("description"),
-  impactLevel: text("impact_level"),
-  effectiveDate: timestamp("effective_date"),
-  source: text("source"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// ─── EXTERNAL PRICE FEEDS ─────────────────────────────────────────────────────
-export const externalPriceFeeds = pgTable("external_price_feeds", {
-  id: serial("id").primaryKey(),
+  summary: text("summary").notNull(),
+  impactLevel: text("impact_level").notNull().default("low"),
+  effectiveDate: timestamp("effective_date").notNull(),
   source: text("source").notNull(),
-  sourceName: text("source_name"),
-  terminalId: text("terminal_id"),
-  productType: text("product_type").notNull(),
-  price: doublePrecision("price").notNull(),
-  currency: text("currency").default("NGN"),
-  fetchedAt: timestamp("fetched_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── FX RATES ─────────────────────────────────────────────────────────────────
 export const fxRates = pgTable("fx_rates", {
-  id: serial("id").primaryKey(),
-  fromCurrency: text("from_currency").notNull(),
-  toCurrency: text("to_currency").notNull(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   rate: doublePrecision("rate").notNull(),
-  fetchedAt: timestamp("fetched_at").defaultNow(),
+  source: text("source").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
-
-// ─── NOTIFICATION LOGS ────────────────────────────────────────────────────────
-export const notificationLogs = pgTable("notification_logs", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  channel: text("channel").notNull(),
-  message: text("message").notNull(),
-  alertType: text("alert_type"),
-  status: text("status").default("sent"),
-  sentAt: timestamp("sent_at").defaultNow(),
 });
 
 // ─── INVENTORY ────────────────────────────────────────────────────────────────
 export const inventory = pgTable("inventory", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  terminalId: text("terminal_id").notNull(),
-  productType: text("product_type").notNull(),
-  volumeLitres: doublePrecision("volume_litres").notNull(),
-  averageCost: doublePrecision("average_cost"),
-  quantityLitres: doublePrecision("quantity_litres"),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().references(() => users.id),
+  terminalId: text("terminal_id").notNull().references(() => terminals.id),
+  productType: text("product_type").notNull().default("PMS"),
+  volumeLitres: doublePrecision("volume_litres").notNull().default(0),
+  averageCost: doublePrecision("average_cost").notNull().default(0),
   lastUpdated: timestamp("last_updated").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // ─── TRANSACTIONS ─────────────────────────────────────────────────────────────
 export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  inventoryId: text("inventory_id"),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  inventoryId: text("inventory_id").notNull().references(() => inventory.id),
   type: text("type").notNull(),
-  amount: doublePrecision("amount").notNull(),
-  currency: text("currency").default("NGN"),
-  status: text("status").default("pending"),
-  reference: text("reference"),
+  volume: doublePrecision("volume").notNull(),
+  price: doublePrecision("price").notNull(),
   date: timestamp("date").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── TRADER SIGNALS ───────────────────────────────────────────────────────────
 export const traderSignals = pgTable("trader_signals", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  terminalId: text("terminal_id").notNull(),
-  productType: text("product_type").notNull(),
-  action: text("action"),
-  message: text("message"),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().references(() => users.id),
+  message: text("message").notNull(),
   sentimentScore: doublePrecision("sentiment_score"),
   impactScore: doublePrecision("impact_score"),
+  terminalId: text("terminal_id").references(() => terminals.id),
+  productType: text("product_type").default("PMS"),
   detectedTerminal: text("detected_terminal"),
   detectedProduct: text("detected_product"),
   keywords: jsonb("keywords"),
-  confidence: doublePrecision("confidence"),
-  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── HEDGE RECOMMENDATIONS ────────────────────────────────────────────────────
 export const hedgeRecommendations = pgTable("hedge_recommendations", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  productType: text("product_type").notNull(),
-  strategy: text("strategy").notNull(),
-  rationale: text("rationale"),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().references(() => users.id),
+  productType: text("product_type").notNull().default("PMS"),
+  strategyType: text("strategy_type").notNull(),
+  reasoning: text("reasoning").notNull(),
+  riskLevel: text("risk_level").notNull().default("medium"),
+  expectedMarginImpact: doublePrecision("expected_margin_impact"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -227,20 +175,25 @@ export const insertForecastSchema = createInsertSchema(forecasts);
 export const insertMarketSignalSchema = createInsertSchema(marketSignals);
 export const insertRefineryUpdateSchema = createInsertSchema(refineryUpdates);
 export const insertRegulationUpdateSchema = createInsertSchema(regulationUpdates);
-export const insertExternalPriceFeedSchema = createInsertSchema(externalPriceFeeds);
 export const insertFxRateSchema = createInsertSchema(fxRates);
+export const insertDepotSchema = createInsertSchema(depots);
+export const insertDepotPriceSchema = createInsertSchema(depotPrices);
+export const insertInventorySchema = createInsertSchema(inventory);
+export const insertTransactionSchema = createInsertSchema(transactions);
+export const insertTraderSignalSchema = createInsertSchema(traderSignals);
+export const insertHedgeRecommendationSchema = createInsertSchema(hedgeRecommendations);
 
 export const loginSchema = z.object({
-  username: z.string().min(1).optional(),
-  email: z.string().optional(),
+  email: z.string().email(),
   password: z.string().min(1),
 });
 
 export const registerSchema = z.object({
-  username: z.string().min(3).optional(),
+  name: z.string().min(2),
+  email: z.string().email(),
   password: z.string().min(6),
-  email: z.string().email().optional(),
-  name: z.string().optional(),
+  phone: z.string().optional(),
+  whatsappPhone: z.string().optional(),
 });
 
 export const updateNotificationPrefsSchema = z.object({
@@ -251,9 +204,6 @@ export const updateNotificationPrefsSchema = z.object({
 
 export const updateSubscriptionSchema = z.object({
   subscriptionTier: z.enum(["free", "basic", "pro", "elite", "enterprise"]).optional(),
-  tier: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
   assignedTerminalId: z.string().optional(),
 });
 
@@ -283,25 +233,28 @@ export type NotificationPrefs = {
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type Terminal = typeof terminals.$inferSelect;
+export type InsertTerminal = z.infer<typeof insertTerminalSchema>;
 export type Forecast = typeof forecasts.$inferSelect;
 export type InsertForecast = z.infer<typeof insertForecastSchema>;
-export type Signal = typeof marketSignals.$inferSelect;
-export type InsertSignal = z.infer<typeof insertMarketSignalSchema>;
-export type Terminal = typeof terminals.$inferSelect;
 export type MarketSignal = typeof marketSignals.$inferSelect;
+export type InsertMarketSignal = z.infer<typeof insertMarketSignalSchema>;
 export type PriceHistoryEntry = typeof priceHistory.$inferSelect;
+export type Depot = typeof depots.$inferSelect;
+export type InsertDepot = z.infer<typeof insertDepotSchema>;
+export type DepotPrice = typeof depotPrices.$inferSelect;
+export type InsertDepotPrice = z.infer<typeof insertDepotPriceSchema>;
 export type RefineryUpdate = typeof refineryUpdates.$inferSelect;
 export type InsertRefineryUpdate = z.infer<typeof insertRefineryUpdateSchema>;
 export type RegulationUpdate = typeof regulationUpdates.$inferSelect;
 export type InsertRegulationUpdate = z.infer<typeof insertRegulationUpdateSchema>;
-export type ExternalPriceFeed = typeof externalPriceFeeds.$inferSelect;
-export type InsertExternalPriceFeed = z.infer<typeof insertExternalPriceFeedSchema>;
 export type FxRate = typeof fxRates.$inferSelect;
 export type InsertFxRate = z.infer<typeof insertFxRateSchema>;
-export type NotificationLog = typeof notificationLogs.$inferSelect;
-export type Depot = typeof depots.$inferSelect;
-export type DepotPrice = typeof depotPrices.$inferSelect;
 export type Inventory = typeof inventory.$inferSelect;
+export type InsertInventory = z.infer<typeof insertInventorySchema>;
 export type Transaction = typeof transactions.$inferSelect;
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type TraderSignal = typeof traderSignals.$inferSelect;
+export type InsertTraderSignal = z.infer<typeof insertTraderSignalSchema>;
 export type HedgeRecommendation = typeof hedgeRecommendations.$inferSelect;
+export type InsertHedgeRecommendation = z.infer<typeof insertHedgeRecommendationSchema>;
