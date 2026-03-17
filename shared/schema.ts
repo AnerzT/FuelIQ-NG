@@ -172,13 +172,15 @@ export const hedgeRecommendations = pgTable("hedge_recommendations", {
 
 // --- INSERT SCHEMAS ---
 export const insertUserSchema = createInsertSchema(users);
+export const insertTerminalSchema = createInsertSchema(terminals);
 export const insertForecastSchema = createInsertSchema(forecasts);
 export const insertMarketSignalSchema = createInsertSchema(marketSignals);
+export const insertPriceHistorySchema = createInsertSchema(priceHistory);
+export const insertDepotSchema = createInsertSchema(depots);
+export const insertDepotPriceSchema = createInsertSchema(depotPrices);
 export const insertRefineryUpdateSchema = createInsertSchema(refineryUpdates);
 export const insertRegulationUpdateSchema = createInsertSchema(regulationUpdates);
 export const insertFxRateSchema = createInsertSchema(fxRates);
-export const insertDepotSchema = createInsertSchema(depots);
-export const insertDepotPriceSchema = createInsertSchema(depotPrices);
 export const insertInventorySchema = createInsertSchema(inventory);
 export const insertTransactionSchema = createInsertSchema(transactions);
 export const insertTraderSignalSchema = createInsertSchema(traderSignals);
@@ -241,6 +243,7 @@ export type InsertForecast = z.infer<typeof insertForecastSchema>;
 export type MarketSignal = typeof marketSignals.$inferSelect;
 export type InsertMarketSignal = z.infer<typeof insertMarketSignalSchema>;
 export type PriceHistoryEntry = typeof priceHistory.$inferSelect;
+export type InsertPriceHistoryEntry = z.infer<typeof insertPriceHistorySchema>;
 export type Depot = typeof depots.$inferSelect;
 export type InsertDepot = z.infer<typeof insertDepotSchema>;
 export type DepotPrice = typeof depotPrices.$inferSelect;
