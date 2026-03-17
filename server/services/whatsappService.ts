@@ -1,191 +1,314 @@
 import { storage } from "../storage.js";
-import type { NotificationPrefs } from "../../shared/schema.js";
 
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
-const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID || "";
-const WHATSAPP_API_URL = "https://graph.facebook.com/v18.0";
+// Configuration
+const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED === "true";
+const WHATSAPP_PROVIDER = process.env.WHATSAPP_PROVIDER || "console"; // console, twilio, etc.
+const WHATSAPP_FROM = process.env.WHATSAPP_FROM || "FuelIQ-NG";
 
-interface WhatsAppMessageResponse {
-  messaging_product: string;
-  contacts: { input: string; wa_id: string }[];
-  messages: { id: string }[];
+// Mock WhatsApp service for development
+class MockWhatsAppService {
+  async send(phone: string, message: string): Promise<boolean> {
+    console.log(`💬 [MOCK WHATSAPP] To: ${phone}`);
+    console.log(`💬 [MOCK WHATSAPP] Message: ${message}`);
+    console.log(`💬 [MOCK WHATSAPP] Length: ${message.length} characters`);
+    return true;
+  }
 }
 
-async function sendWhatsAppMessage(
-  to: string,
-  message: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    console.log(`[WhatsApp] Not configured. Would send to ${to}: ${message.substring(0, 50)}...`);
-    return { success: true, messageId: "simulated" };
+// Twilio WhatsApp service
+class TwilioWhatsAppService {
+  private client: any;
+  private fromNumber: string;
+
+  constructor() {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    // Twilio WhatsApp numbers are in format: whatsapp:+14155238886
+    this.fromNumber = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_PHONE_NUMBER}`;
+
+    if (!accountSid || !authToken) {
+      console.warn("⚠️ Twilio credentials not configured, falling back to mock WhatsApp");
+      this.client = null;
+    } else {
+      try {
+        // Dynamic import to avoid requiring twilio in all environments
+        import('twilio').then(twilio => {
+          this.client = twilio(accountSid, authToken);
+          console.log("✅ Twilio WhatsApp service initialized");
+        }).catch(err => {
+          console.error("❌ Failed to load twilio package:", err);
+          this.client = null;
+        });
+      } catch (err) {
+        console.error("❌ Failed to initialize Twilio:", err);
+        this.client = null;
+      }
+    }
   }
 
-  try {
-    const response = await fetch(`${WHATSAPP_API_URL}/${WHATSAPP_PHONE_ID}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: to.replace(/[^0-9]/g, ""),
-        type: "text",
-        text: { preview_url: false, body: message },
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-
-    const data = (await response.json()) as any;
-
-    if (response.ok && data.messages?.[0]?.id) {
-      return { success: true, messageId: data.messages[0].id };
+  async send(phone: string, message: string): Promise<boolean> {
+    if (!this.client) {
+      // Fallback to mock
+      const mockService = new MockWhatsAppService();
+      return mockService.send(phone, message);
     }
 
-    const errorMsg = data.error?.message || `WhatsApp API error ${response.status}`;
-    return { success: false, error: errorMsg };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
+    try {
+      // Format phone number for WhatsApp
+      const formattedPhone = this.formatPhoneNumber(phone);
+      
+      const result = await this.client.messages.create({
+        body: message,
+        from: this.fromNumber,
+        to: formattedPhone,
+      });
 
-async function sendWhatsAppTemplate(
-  to: string,
-  templateName: string,
-  parameters: string[]
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    console.log(`[WhatsApp] Not configured. Would send template "${templateName}" to ${to}`);
-    return { success: true, messageId: "simulated" };
-  }
-
-  try {
-    const response = await fetch(`${WHATSAPP_API_URL}/${WHATSAPP_PHONE_ID}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to.replace(/[^0-9]/g, ""),
-        type: "template",
-        template: {
-          name: templateName,
-          language: { code: "en" },
-          components: [
-            {
-              type: "body",
-              parameters: parameters.map((p) => ({ type: "text", text: p })),
-            },
-          ],
-        },
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-
-    const data = (await response.json()) as any;
-
-    if (response.ok && data.messages?.[0]?.id) {
-      return { success: true, messageId: data.messages[0].id };
+      console.log(`✅ WhatsApp message sent to ${formattedPhone}, SID: ${result.sid}`);
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to send WhatsApp message via Twilio:", error);
+      return false;
     }
-    return { success: false, error: data.error?.message || `WhatsApp error ${response.status}` };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  }
+
+  private formatPhoneNumber(phone: string): string {
+    // Remove any non-digit characters
+    const digits = phone.replace(/\D/g, '');
+    
+    // Format for WhatsApp: whatsapp:+234XXXXXXXXXX
+    if (digits.startsWith('0')) {
+      return `whatsapp:+234${digits.substring(1)}`;
+    }
+    
+    if (!digits.startsWith('234') && digits.length === 11) {
+      return `whatsapp:+234${digits.substring(1)}`;
+    }
+    
+    if (digits.startsWith('234')) {
+      return `whatsapp:+${digits}`;
+    }
+    
+    return `whatsapp:+${digits}`;
   }
 }
 
-export async function sendForecastAlert(
-  terminalName: string,
-  bias: string,
-  probability: { increase: number; decrease: number; stable: number },
-  expectedRange: { min: number; max: number }
-): Promise<number> {
-  const message =
-    `📊 *FuelIQ Forecast Alert*\n\n` +
-    `*Terminal:* ${terminalName}\n` +
-    `*Bias:* ${bias.toUpperCase()}\n` +
-    `*Expected Range:* ₦${expectedRange.min} - ₦${expectedRange.max}\n\n` +
-    `📈 Increase: ${probability.increase}%\n` +
-    `📉 Drop: ${probability.decrease}%\n` +
-    `➡️ Stable: ${probability.stable}%`;
-
-  return broadcastWhatsApp("forecastAlerts", message);
+// Console WhatsApp service (for development)
+class ConsoleWhatsAppService {
+  async send(phone: string, message: string): Promise<boolean> {
+    console.log(`💬 [CONSOLE WHATSAPP] To: ${phone}`);
+    console.log(`💬 [CONSOLE WHATSAPP] Message: ${message}`);
+    console.log(`💬 [CONSOLE WHATSAPP] Length: ${message.length} characters`);
+    return true;
+  }
 }
 
-export async function sendPriceAlert(
-  terminalName: string,
-  priceChange: number,
-  currentPrice: number
-): Promise<number> {
-  const emoji = priceChange > 0 ? "🔴" : "🟢";
-  const direction = priceChange > 0 ? "INCREASED" : "DECREASED";
-  const message =
-    `${emoji} *FuelIQ Price Alert*\n\n` +
-    `*Terminal:* ${terminalName}\n` +
-    `Price has ${direction} by *₦${Math.abs(priceChange)}*\n` +
-    `*Current Price:* ₦${currentPrice}/litre`;
-
-  return broadcastWhatsApp("priceAlerts", message);
-}
-
-export async function sendRefineryAlert(
-  refineryName: string,
-  status: string,
-  outputChange: string
-): Promise<number> {
-  const message =
-    `🏭 *FuelIQ Refinery Update*\n\n` +
-    `*Refinery:* ${refineryName}\n` +
-    `*Status:* ${status}\n` +
-    `*Output:* ${outputChange}`;
-
-  return broadcastWhatsApp("refineryAlerts", message);
-}
-
-export async function sendMorningDigest(
-  summaries: { terminal: string; bias: string; range: string; confidence: number }[]
-): Promise<number> {
-  const date = new Date().toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "short" });
-  let message =
-    `☀️ *FuelIQ Morning Digest*\n` +
-    `📅 ${date}\n\n`;
-
-  for (const s of summaries.slice(0, 8)) {
-    const biasEmoji = s.bias === "bullish" ? "📈" : s.bias === "bearish" ? "📉" : "➡️";
-    message += `${biasEmoji} *${s.terminal}*: ${s.bias} (${s.confidence}%)\n   Range: ${s.range}\n\n`;
+// Factory to get the appropriate WhatsApp service
+function getWhatsAppService() {
+  if (!WHATSAPP_ENABLED) {
+    return new ConsoleWhatsAppService();
   }
 
-  message += `_Powered by FuelIQ NG_`;
-
-  return broadcastWhatsApp("morningDigest", message);
+  switch (WHATSAPP_PROVIDER) {
+    case 'twilio':
+      return new TwilioWhatsAppService();
+    case 'console':
+    default:
+      return new ConsoleWhatsAppService();
+  }
 }
 
-async function broadcastWhatsApp(alertType: string, message: string): Promise<number> {
-  const users = await storage.getSubscribedUsers("whatsapp", alertType as keyof NotificationPrefs);
-  let sent = 0;
+// Create the WhatsApp service instance
+const whatsAppService = getWhatsAppService();
 
-  for (const user of users) {
-    const userWhatsapp = (user as any).whatsappPhone;
-    if (!userWhatsapp) continue;
+/**
+ * Send a WhatsApp message
+ * @param phone Recipient phone number
+ * @param message Message content
+ * @returns Promise<boolean> indicating success
+ */
+export async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
+  try {
+    if (!phone) {
+      console.error("❌ Cannot send WhatsApp message: No phone number provided");
+      return false;
+    }
 
-    const result = await sendWhatsAppMessage(userWhatsapp, message);
-    await storage.createNotificationLog({
-      userId: user.id,
-      channel: "whatsapp",
-      alertType: String(alertType),
-      message,
-      status: result.success ? "sent" : "failed",
-    } as any);
+    if (!message) {
+      console.error("❌ Cannot send WhatsApp message: No message provided");
+      return false;
+    }
 
-    if (result.success) sent++;
+    // Log the attempt
+    console.log(`📤 Attempting to send WhatsApp message to ${phone}`);
+    
+    // Send via the service
+    const result = await whatsAppService.send(phone, message);
+    
+    if (result) {
+      console.log(`✅ WhatsApp message sent successfully to ${phone}`);
+    } else {
+      console.error(`❌ Failed to send WhatsApp message to ${phone}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("❌ Error in sendWhatsAppMessage function:", error);
+    return false;
+  }
+}
+
+/**
+ * Send bulk WhatsApp messages
+ * @param recipients Array of phone numbers and messages
+ * @returns Promise with results
+ */
+export async function sendBulkWhatsAppMessages(
+  recipients: Array<{ phone: string; message: string }>
+): Promise<Array<{ phone: string; success: boolean; error?: string }>> {
+  const results = [];
+
+  for (const recipient of recipients) {
+    try {
+      const success = await sendWhatsAppMessage(recipient.phone, recipient.message);
+      results.push({
+        phone: recipient.phone,
+        success,
+        error: success ? undefined : "Failed to send",
+      });
+      
+      // Small delay to avoid rate limiting
+      if (recipients.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (error) {
+      results.push({
+        phone: recipient.phone,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   }
 
-  console.log(`[WhatsApp] Broadcast "${alertType}": ${sent}/${users.length} sent`);
-  return sent;
+  return results;
 }
 
-export function isWhatsAppConfigured(): boolean {
-  return !!(WHATSAPP_TOKEN && WHATSAPP_PHONE_ID);
+/**
+ * Send WhatsApp message to multiple users with the same message
+ * @param phones Array of phone numbers
+ * @param message Message to send
+ * @returns Promise with results
+ */
+export async function sendWhatsAppToMany(phones: string[], message: string): Promise<{
+  total: number;
+  successful: number;
+  failed: number;
+  results: Array<{ phone: string; success: boolean }>;
+}> {
+  const results = [];
+  let successful = 0;
+  let failed = 0;
+
+  for (const phone of phones) {
+    try {
+      const success = await sendWhatsAppMessage(phone, message);
+      results.push({ phone, success });
+      
+      if (success) {
+        successful++;
+      } else {
+        failed++;
+      }
+      
+      // Small delay to avoid rate limiting
+      if (phones.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (error) {
+      results.push({ phone, success: false });
+      failed++;
+    }
+  }
+
+  return {
+    total: phones.length,
+    successful,
+    failed,
+    results,
+  };
 }
+
+/**
+ * Verify if a phone number is valid for WhatsApp
+ * @param phone Phone number to verify
+ * @returns boolean indicating if valid
+ */
+export function isValidWhatsAppNumber(phone: string): boolean {
+  // Remove any non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  
+  // Check if it's a Nigerian number (11 digits starting with 0, or 13 digits starting with 234)
+  const isValidNigerian = (digits.length === 11 && digits.startsWith('0')) ||
+                          (digits.length === 13 && digits.startsWith('234'));
+  
+  // Basic international format check
+  const isValidInternational = digits.length >= 10 && digits.length <= 15;
+  
+  return isValidNigerian || isValidInternational;
+}
+
+/**
+ * Get WhatsApp service status
+ * @returns Status object
+ */
+export function getWhatsAppStatus(): {
+  enabled: boolean;
+  provider: string;
+  configured: boolean;
+} {
+  const provider = WHATSAPP_PROVIDER;
+  let configured = true;
+
+  if (provider === 'twilio') {
+    configured = !!(process.env.TWILIO_ACCOUNT_SID && 
+                    process.env.TWILIO_AUTH_TOKEN && 
+                    process.env.TWILIO_WHATSAPP_NUMBER);
+  }
+
+  return {
+    enabled: WHATSAPP_ENABLED,
+    provider,
+    configured,
+  };
+}
+
+/**
+ * Format a message with WhatsApp-specific formatting
+ * @param message Raw message
+ * @returns Formatted message
+ */
+export function formatWhatsAppMessage(message: string): string {
+  // WhatsApp supports basic markdown
+  let formatted = message;
+  
+  // Bold: *text*
+  // Italic: _text_
+  // Strikethrough: ~text~
+  // Code: ```text```
+  
+  return formatted;
+}
+
+// For backward compatibility, also export as sendWhatsApp (but marked as deprecated)
+/**
+ * @deprecated Use sendWhatsAppMessage instead
+ */
+export const sendWhatsApp = sendWhatsAppMessage;
+
+export default {
+  sendWhatsAppMessage,
+  sendBulkWhatsAppMessages,
+  sendWhatsAppToMany,
+  isValidWhatsAppNumber,
+  getWhatsAppStatus,
+  formatWhatsAppMessage,
+};
