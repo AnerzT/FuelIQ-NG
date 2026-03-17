@@ -4,6 +4,7 @@ import postgres from 'postgres';
 import * as schema from '../shared/schema.js';
 
 let dbInstance: ReturnType<typeof drizzle> | null = null;
+let connectionPromise: Promise<ReturnType<typeof drizzle>> | null = null;
 
 export async function getDb() {
   if (dbInstance) return dbInstance;
@@ -29,7 +30,12 @@ export async function getDb() {
   }
 }
 
-export const db = await getDb();
+// Initialize db immediately for exports
+if (!connectionPromise) {
+  connectionPromise = getDb();
+}
+
+export const db = await connectionPromise;
 
 export async function testDatabaseConnection() {
   try {
