@@ -1,30 +1,34 @@
 import type { Response } from "express";
-import type { AuthRequest } from "../middleware/auth.js";
 import { storage } from "../storage.js";
-import { TIER_LIMITS, updateSubscriptionSchema, type SubscriptionTier } from "../../shared/schema.js";
+import type { AuthRequest } from "../middleware/auth.js";
+import { TIER_LIMITS, type SubscriptionTier } from "../../shared/schema.js";
 
 export async function getSubscriptionInfo(req: AuthRequest, res: Response) {
   try {
-    const user = await storage.getUser(req.userId!);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
-    const tier = (user.subscriptionTier || "free") as SubscriptionTier;
-    const limits = TIER_LIMITS[tier];
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const tier = user.subscriptionTier as SubscriptionTier;
+    const limits = TIER_LIMITS[tier] || TIER_LIMITS.free;
 
     return res.json({
       success: true,
       data: {
-        tier,
+        tier: user.subscriptionTier,
+        startDate: user.subscriptionStartDate,
+        endDate: user.subscriptionEndDate,
         limits,
-        subscriptionStartDate: user.subscriptionStartDate,
-        subscriptionEndDate: user.subscriptionEndDate,
         usage: {
-          forecastsUsedToday: user.forecastsUsedToday,
-          forecastDayResetDate: user.forecastDayResetDate,
-          smsAlertsUsedThisWeek: user.smsAlertsUsedThisWeek,
-          smsWeekResetDate: user.smsWeekResetDate,
+          forecastsUsedToday: user.forecastsUsedToday || 0,
+          smsAlertsUsedThisWeek: user.smsAlertsUsedThisWeek || 0,
         },
-        assignedTerminalId: user.assignedTerminalId,
       },
     });
   } catch (err: any) {
@@ -32,45 +36,41 @@ export async function getSubscriptionInfo(req: AuthRequest, res: Response) {
   }
 }
 
-export async function getTierInfo(_req: AuthRequest, res: Response) {
-  return res.json({
-    success: true,
-    data: TIER_LIMITS,
-  });
+export async function getTierInfo(req: AuthRequest, res: Response) {
+  try {
+    return res.json({
+      success: true,
+      data: TIER_LIMITS,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 }
 
 export async function updateSubscription(req: AuthRequest, res: Response) {
   try {
-    if (req.userRole !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Only admins can change subscription tiers. Contact support to upgrade.",
-      });
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const parsed = updateSubscriptionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Invalid input" });
+    const { subscriptionTier, assignedTerminalId } = req.body;
+
+    const updateData: any = {};
+    if (subscriptionTier) updateData.subscriptionTier = subscriptionTier;
+    if (assignedTerminalId) updateData.assignedTerminalId = assignedTerminalId;
+
+    const updatedUser = await storage.updateUser(userId, updateData);
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
-
-    const targetUserId = req.body.userId || req.userId!;
-
-    const updated = await storage.updateUserSubscription(targetUserId, {
-      tier: parsed.data.subscriptionTier || parsed.data.tier,
-      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : new Date(),
-      endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
-      assignedTerminalId: parsed.data.assignedTerminalId,
-    });
-
-    if (!updated) return res.status(404).json({ success: false, message: "User not found" });
 
     return res.json({
       success: true,
-      message: `Subscription updated to ${parsed.data.subscriptionTier || parsed.data.tier}`,
+      message: "Subscription updated successfully",
       data: {
-        tier: updated.subscriptionTier,
-        subscriptionStartDate: updated.subscriptionStartDate,
-        subscriptionEndDate: updated.subscriptionEndDate,
+        tier: updatedUser.subscriptionTier,
+        assignedTerminalId: updatedUser.assignedTerminalId,
       },
     });
   } catch (err: any) {
@@ -80,21 +80,26 @@ export async function updateSubscription(req: AuthRequest, res: Response) {
 
 export async function adminGetAllSubscriptions(req: AuthRequest, res: Response) {
   try {
-    const allUsers = await storage.getAllUsers();
-    const subscriptions = allUsers.map((u) => ({
-      id: u.id,
-      name: (u as any).name ?? u.username,
-      email: u.email,
-      role: u.role,
-      tier: u.subscriptionTier,
-      subscriptionStartDate: u.subscriptionStartDate,
-      subscriptionEndDate: u.subscriptionEndDate,
-      smsAlertsUsedThisWeek: u.smsAlertsUsedThisWeek,
-      forecastsUsedToday: u.forecastsUsedToday,
-      assignedTerminalId: u.assignedTerminalId,
+    const users = await storage.getAllUsers();
+    
+    const subscriptions = users.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      tier: user.subscriptionTier,
+      startDate: user.subscriptionStartDate,
+      endDate: user.subscriptionEndDate,
+      assignedTerminalId: user.assignedTerminalId,
+      usage: {
+        forecastsUsedToday: user.forecastsUsedToday || 0,
+        smsAlertsUsedThisWeek: user.smsAlertsUsedThisWeek || 0,
+      },
     }));
 
-    return res.json({ success: true, data: subscriptions });
+    return res.json({
+      success: true,
+      data: subscriptions,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -103,30 +108,26 @@ export async function adminGetAllSubscriptions(req: AuthRequest, res: Response) 
 export async function adminUpdateSubscription(req: AuthRequest, res: Response) {
   try {
     const { userId } = req.params;
-    const parsed = updateSubscriptionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Invalid input" });
+    const { subscriptionTier, assignedTerminalId } = req.body;
+
+    const updateData: any = {};
+    if (subscriptionTier) updateData.subscriptionTier = subscriptionTier;
+    if (assignedTerminalId) updateData.assignedTerminalId = assignedTerminalId;
+
+    const updatedUser = await storage.updateUser(userId, updateData);
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
-
-    const updated = await storage.updateUserSubscription(userId, {
-      tier: parsed.data.subscriptionTier || parsed.data.tier,
-      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : new Date(),
-      endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
-      assignedTerminalId: parsed.data.assignedTerminalId,
-    });
-
-    if (!updated) return res.status(404).json({ success: false, message: "User not found" });
 
     return res.json({
       success: true,
-      message: `User subscription updated to ${parsed.data.subscriptionTier || parsed.data.tier}`,
+      message: "User subscription updated successfully",
       data: {
-        id: updated.id,
-        name: (updated as any).name ?? updated.username,
-        email: updated.email,
-        tier: updated.subscriptionTier,
-        subscriptionStartDate: updated.subscriptionStartDate,
-        subscriptionEndDate: updated.subscriptionEndDate,
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        tier: updatedUser.subscriptionTier,
+        assignedTerminalId: updatedUser.assignedTerminalId,
       },
     });
   } catch (err: any) {
