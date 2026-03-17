@@ -1,8 +1,8 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
 import type { AuthRequest } from "../middleware/auth.js";
-import { sendSMS } from "../services/smsService.js";
-import { sendWhatsApp } from "../services/whatsappService.js";
+import { sendSms } from "../services/smsService.js";
+import { sendWhatsAppMessage } from "../services/whatsappService.js";
 
 export async function getNotificationPrefs(req: AuthRequest, res: Response) {
   try {
@@ -152,13 +152,13 @@ export async function triggerMorningDigest(req: AuthRequest, res: Response) {
 
       try {
         if (prefs.smsEnabled && user.phone) {
-          await sendSMS(user.phone, message);
+          await sendSms(user.phone, message);
           await storage.createNotificationLog(user.id, "sms", message, "morning_digest");
           results.sms++;
         }
 
         if (prefs.whatsappEnabled && user.whatsappPhone) {
-          await sendWhatsApp(user.whatsappPhone, message);
+          await sendWhatsAppMessage(user.whatsappPhone, message);
           await storage.createNotificationLog(user.id, "whatsapp", message, "morning_digest");
           results.whatsapp++;
         }
@@ -199,7 +199,7 @@ export async function triggerTestNotification(req: AuthRequest, res: Response) {
     if (channel === "sms" || !channel) {
       if (prefs.smsEnabled && user.phone) {
         try {
-          await sendSMS(user.phone, message);
+          await sendSms(user.phone, message);
           await storage.createNotificationLog(user.id, "sms", message, "test");
           results.sms = "sent";
         } catch (error) {
@@ -214,7 +214,7 @@ export async function triggerTestNotification(req: AuthRequest, res: Response) {
     if (channel === "whatsapp" || !channel) {
       if (prefs.whatsappEnabled && user.whatsappPhone) {
         try {
-          await sendWhatsApp(user.whatsappPhone, message);
+          await sendWhatsAppMessage(user.whatsappPhone, message);
           await storage.createNotificationLog(user.id, "whatsapp", message, "test");
           results.whatsapp = "sent";
         } catch (error) {
