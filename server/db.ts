@@ -1,37 +1,42 @@
+// server/db.ts
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../shared/schema.js';
 
-let db: ReturnType<typeof drizzle> | null = null;
+let dbInstance: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  if (db) return db;
-
-  const url = process.env.DATABASE_URL;
+  if (dbInstance) return dbInstance;
   
-  if (!url) {
-    throw new Error('DATABASE_URL not set');
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ DATABASE_URL environment variable is not set');
+    throw new Error('Database connection failed: DATABASE_URL not set');
   }
 
-  const client = postgres(url, {
-    max: 1,
-    idle_timeout: 20,
-    connect_timeout: 10,
-    ssl: 'require',  // ← ADD THIS for Supabase
-  });
-
-  db = drizzle(client, { schema });
-  return db;
+  try {
+    const client = postgres(process.env.DATABASE_URL, {
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+    
+    dbInstance = drizzle(client, { schema });
+    console.log('✅ Database connected');
+    return dbInstance;
+  } catch (error) {
+    console.error('❌ Database connection error:', error);
+    throw error;
+  }
 }
+
+export const db = await getDb();
 
 export async function testDatabaseConnection() {
   try {
-    const db = await getDb();
-     await db.execute('SELECT 1' as any);
-    console.log('✅ Database connected');
+    await db.execute('SELECT 1');
     return 'connected';
   } catch (error) {
     console.error('❌ Database test failed:', error);
-    throw error;  // ← throw instead of silently returning
+    return 'disconnected';
   }
 }
