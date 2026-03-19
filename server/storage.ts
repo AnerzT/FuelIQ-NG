@@ -332,7 +332,8 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(depotPrices.productType, productType));
     }
     
-    return await query.orderBy(desc(depotPrices.updatedAt));
+    const results = await query.orderBy(desc(depotPrices.updatedAt));
+    return results;
   }
 
   async createDepotPrice(price: any): Promise<DepotPrice> {
