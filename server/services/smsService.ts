@@ -1,309 +1,361 @@
-import type { Response } from "express";
-import { storage } from "../storage.js";
-import type { AuthRequest } from "../middleware/auth.js";
-import { calculateSpread, detectArbitrageOpportunity } from "../services/forecastEngine.js";
+// server/services/smsService.ts
 
-export async function getHedgeRecommendations(req: AuthRequest, res: Response) {
-  try {
-    const userId = req.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
+// Configuration
+const SMS_ENABLED = process.env.SMS_ENABLED === "true";
+const SMS_PROVIDER = process.env.SMS_PROVIDER || "console"; // console, twilio, africaistalking, etc.
+const SMS_FROM = process.env.SMS_FROM || "FuelIQ-NG";
 
-    // Fixed: Now passing only one argument
-    const recommendations = await storage.getHedgeRecommendations(userId);
-    
-    return res.json({
-      success: true,
-      data: recommendations,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+// Mock SMS service for development
+class MockSmsService {
+  async send(phone: string, message: string): Promise<boolean> {
+    console.log(`📱 [MOCK SMS] To: ${phone}`);
+    console.log(`📱 [MOCK SMS] Message: ${message}`);
+    console.log(`📱 [MOCK SMS] Length: ${message.length} characters`);
+    return true;
   }
 }
 
-export async function generateHedgeRecommendations(req: AuthRequest, res: Response) {
-  try {
-    const userId = req.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+// Twilio SMS service
+class TwilioSmsService {
+  private client: any;
+  private fromNumber: string;
+
+  constructor() {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || SMS_FROM;
+
+    if (!accountSid || !authToken) {
+      console.warn("⚠️ Twilio credentials not configured, falling back to mock SMS");
+      this.client = null;
+    } else {
+      try {
+        // Dynamic import to avoid requiring twilio in all environments
+        import('twilio').then(twilio => {
+          this.client = twilio(accountSid, authToken);
+          console.log("✅ Twilio SMS service initialized");
+        }).catch(err => {
+          console.error("❌ Failed to load twilio package:", err);
+          this.client = null;
+        });
+      } catch (err) {
+        console.error("❌ Failed to initialize Twilio:", err);
+        this.client = null;
+      }
+    }
+  }
+
+  async send(phone: string, message: string): Promise<boolean> {
+    if (!this.client) {
+      // Fallback to mock
+      const mockService = new MockSmsService();
+      return mockService.send(phone, message);
     }
 
-    // Get user's inventory for context
-    const inventory = await storage.getInventory(userId);
-    
-    // Get market data
-    const terminals = await storage.getAllTerminals();
-    const signals = await Promise.all(
-      terminals.map(async (terminal) => {
-        const signal = await storage.getLatestSignal(terminal.id);
-        return { terminal, signal };
-      })
-    );
-    
-    // Get depot prices for analysis
-    const depotPrices = await storage.getDepotPrices();
-    
-    // Group prices by product
-    const pricesByProduct: Record<string, any[]> = {};
-    depotPrices.forEach(price => {
-      if (!pricesByProduct[price.productType]) {
-        pricesByProduct[price.productType] = [];
-      }
-      pricesByProduct[price.productType].push(price);
-    });
-    
-    // Calculate average prices by product
-    const avgPrices: Record<string, number> = {};
-    Object.entries(pricesByProduct).forEach(([product, prices]) => {
-      const sum = prices.reduce((acc, p) => acc + p.price, 0);
-      avgPrices[product] = prices.length > 0 ? sum / prices.length : 0;
-    });
-    
-    // Generate recommendations based on market conditions
-    const recommendations = [];
-    
-    // Check for arbitrage opportunities
-    const arbitrage = detectArbitrageOpportunity("", avgPrices);
-    if (arbitrage?.exists) {
-      recommendations.push({
-        userId,
-        productType: "PMS",
-        strategyType: "arbitrage",
-        reasoning: `Arbitrage opportunity detected with spread of ₦${arbitrage.spread}. ${arbitrage.recommendation}`,
-        riskLevel: "medium",
-        expectedMarginImpact: arbitrage.spread * 0.7,
+    try {
+      // Format phone number (ensure it has country code)
+      const formattedPhone = this.formatPhoneNumber(phone);
+      
+      const result = await this.client.messages.create({
+        body: message,
+        from: this.fromNumber,
+        to: formattedPhone,
       });
+
+      console.log(`✅ SMS sent to ${formattedPhone}, SID: ${result.sid}`);
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to send SMS via Twilio:", error);
+      return false;
+    }
+  }
+
+  private formatPhoneNumber(phone: string): string {
+    // Remove any non-digit characters
+    const digits = phone.replace(/\D/g, '');
+    
+    // Nigerian numbers: if it starts with 0, replace with +234
+    if (digits.startsWith('0')) {
+      return '+234' + digits.substring(1);
     }
     
-    // Check for spread opportunities
-    const pmsAgoSpread = calculateSpread("PMS", "AGO", avgPrices);
-    if (Math.abs(pmsAgoSpread) > 30) {
-      const direction = pmsAgoSpread > 0 ? "AGO over PMS" : "PMS over AGO";
-      recommendations.push({
-        userId,
-        productType: "AGO",
-        strategyType: "spread",
-        reasoning: `${direction} spread is favorable at ₦${Math.abs(pmsAgoSpread)}. Consider adjusting positions.`,
-        riskLevel: "low",
-        expectedMarginImpact: Math.abs(pmsAgoSpread) * 0.5,
-      });
+    // If it doesn't have +, add it
+    if (!phone.startsWith('+')) {
+      return '+' + digits;
     }
     
-    // Check supply signals
-    const weakSupplySignals = signals.filter(s => s.signal?.nnpcSupply === "Weak" || s.signal?.nnpcSupply === "Critical");
-    if (weakSupplySignals.length > 0) {
-      recommendations.push({
-        userId,
-        productType: "PMS",
-        strategyType: "supply_hedge",
-        reasoning: `Weak supply detected at ${weakSupplySignals.length} terminals. Consider building inventory.`,
-        riskLevel: "high",
-        expectedMarginImpact: 25,
-      });
-    }
-    
-    // Save recommendations to storage
-    const savedRecommendations = [];
-    for (const rec of recommendations) {
-      const saved = await storage.createHedgeRecommendation(rec);
-      savedRecommendations.push(saved);
-    }
-    
-    return res.status(201).json({
-      success: true,
-      message: "Hedge recommendations generated successfully",
-      data: savedRecommendations,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+    return phone;
   }
 }
 
-export async function getAdvancedAnalysis(req: AuthRequest, res: Response) {
-  try {
-    const userId = req.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+// Africa's Talking SMS service
+class AfricaIsTalkingSmsService {
+  private username: string;
+  private apiKey: string;
+  private from: string;
+
+  constructor() {
+    this.username = process.env.AFRICASTALKING_USERNAME || '';
+    this.apiKey = process.env.AFRICASTALKING_API_KEY || '';
+    this.from = process.env.SMS_FROM || 'FuelIQ-NG';
+
+    if (!this.username || !this.apiKey) {
+      console.warn("⚠️ Africa's Talking credentials not configured, falling back to mock SMS");
+    }
+  }
+
+  async send(phone: string, message: string): Promise<boolean> {
+    if (!this.username || !this.apiKey) {
+      // Fallback to mock
+      const mockService = new MockSmsService();
+      return mockService.send(phone, message);
     }
 
-    // Get all terminals
-    const terminals = await storage.getAllTerminals();
+    try {
+      // Format phone number for Africa's Talking
+      const formattedPhone = this.formatPhoneNumber(phone);
+      
+      // Dynamic import to avoid requiring the package in all environments
+      import('africastalking').then(africastalking => {
+        const client = africastalking({
+          username: this.username,
+          apiKey: this.apiKey,
+        });
+        
+        return client.SMS.send({
+          to: [formattedPhone],
+          message: message,
+          from: this.from,
+        });
+      }).then(response => {
+        console.log(`✅ SMS sent to ${formattedPhone} via Africa's Talking`, response);
+        return true;
+      }).catch(err => {
+        console.error("❌ Failed to send SMS via Africa's Talking:", err);
+        return false;
+      });
+
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to send SMS via Africa's Talking:", error);
+      return false;
+    }
+  }
+
+  private formatPhoneNumber(phone: string): string {
+    // Remove any non-digit characters
+    const digits = phone.replace(/\D/g, '');
     
-    // Get latest signals for each terminal
-    const terminalSignals = await Promise.all(
-      terminals.map(async (terminal) => {
-        const signal = await storage.getLatestSignal(terminal.id);
-        return { terminal, signal };
-      })
-    );
+    // Africa's Talking expects international format without +
+    if (digits.startsWith('0')) {
+      return '234' + digits.substring(1);
+    }
     
-    // Get all depot prices
-    const depotPrices = await storage.getDepotPrices();
+    return digits;
+  }
+}
+
+// Console SMS service (for development)
+class ConsoleSmsService {
+  async send(phone: string, message: string): Promise<boolean> {
+    console.log(`📱 [CONSOLE SMS] To: ${phone}`);
+    console.log(`📱 [CONSOLE SMS] Message: ${message}`);
+    console.log(`📱 [CONSOLE SMS] Length: ${message.length} characters`);
+    return true;
+  }
+}
+
+// Factory to get the appropriate SMS service
+function getSmsService() {
+  if (!SMS_ENABLED) {
+    return new ConsoleSmsService();
+  }
+
+  switch (SMS_PROVIDER) {
+    case 'twilio':
+      return new TwilioSmsService();
+    case 'africastalking':
+      return new AfricaIsTalkingSmsService();
+    case 'console':
+    default:
+      return new ConsoleSmsService();
+  }
+}
+
+// Create the SMS service instance
+const smsService = getSmsService();
+
+/**
+ * Send an SMS message
+ * @param phone Recipient phone number
+ * @param message Message content
+ * @returns Promise<boolean> indicating success
+ */
+export async function sendSms(phone: string, message: string): Promise<boolean> {
+  try {
+    if (!phone) {
+      console.error("❌ Cannot send SMS: No phone number provided");
+      return false;
+    }
+
+    if (!message) {
+      console.error("❌ Cannot send SMS: No message provided");
+      return false;
+    }
+
+    // Log the attempt
+    console.log(`📤 Attempting to send SMS to ${phone}`);
     
-    // Get user's inventory
-    const inventory = await storage.getInventory(userId);
+    // Send via the service
+    const result = await smsService.send(phone, message);
     
-    // Calculate average prices by product - Fixed: Removed depotName references
-    const pricesByProduct: Record<string, number[]> = {};
-    depotPrices.forEach(price => {
-      if (!pricesByProduct[price.productType]) {
-        pricesByProduct[price.productType] = [];
+    if (result) {
+      console.log(`✅ SMS sent successfully to ${phone}`);
+    } else {
+      console.error(`❌ Failed to send SMS to ${phone}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("❌ Error in sendSms function:", error);
+    return false;
+  }
+}
+
+/**
+ * Send bulk SMS messages
+ * @param recipients Array of phone numbers and messages
+ * @returns Promise with results
+ */
+export async function sendBulkSms(
+  recipients: Array<{ phone: string; message: string }>
+): Promise<Array<{ phone: string; success: boolean; error?: string }>> {
+  const results = [];
+
+  for (const recipient of recipients) {
+    try {
+      const success = await sendSms(recipient.phone, recipient.message);
+      results.push({
+        phone: recipient.phone,
+        success,
+        error: success ? undefined : "Failed to send",
+      });
+      
+      // Small delay to avoid rate limiting
+      if (recipients.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-      pricesByProduct[price.productType].push(price.price);
-    });
-    
-    const avgPrices: Record<string, number> = {};
-    Object.entries(pricesByProduct).forEach(([product, prices]) => {
-      const sum = prices.reduce((acc, p) => acc + p, 0);
-      avgPrices[product] = prices.length > 0 ? sum / prices.length : 0;
-    });
-    
-    // Calculate market volatility
-    const volatility: Record<string, number> = {};
-    Object.entries(pricesByProduct).forEach(([product, prices]) => {
-      if (prices.length > 1) {
-        const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
-        const variance = prices.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / prices.length;
-        volatility[product] = Math.sqrt(variance) / mean;
+    } catch (error) {
+      results.push({
+        phone: recipient.phone,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Send SMS to multiple users with the same message
+ * @param phones Array of phone numbers
+ * @param message Message to send
+ * @returns Promise with results
+ */
+export async function sendSmsToMany(phones: string[], message: string): Promise<{
+  total: number;
+  successful: number;
+  failed: number;
+  results: Array<{ phone: string; success: boolean }>;
+}> {
+  const results = [];
+  let successful = 0;
+  let failed = 0;
+
+  for (const phone of phones) {
+    try {
+      const success = await sendSms(phone, message);
+      results.push({ phone, success });
+      
+      if (success) {
+        successful++;
       } else {
-        volatility[product] = 0.05;
+        failed++;
       }
-    });
-    
-    // Calculate spreads
-    const spreads = {
-      PMS_AGO: calculateSpread("PMS", "AGO", avgPrices),
-      PMS_DPK: calculateSpread("PMS", "DPK", avgPrices),
-      AGO_DPK: calculateSpread("AGO", "DPK", avgPrices),
-    };
-    
-    // Calculate portfolio risk
-    const portfolioValue = inventory.reduce((sum, item) => 
-      sum + (item.volumeLitres * item.averageCost), 0);
-    
-    const weightedRisk = inventory.reduce((sum, item) => {
-      const productVol = volatility[item.productType] || 0.05;
-      return sum + (item.volumeLitres * item.averageCost * productVol);
-    }, 0) / (portfolioValue || 1);
-    
-    // Identify supply constraints
-    const supplyConstraints = terminalSignals
-      .filter(s => s.signal?.nnpcSupply === "Weak" || s.signal?.nnpcSupply === "Critical")
-      .map(s => ({
-        terminal: s.terminal.name,
-        supply: s.signal?.nnpcSupply,
-      }));
-    
-    return res.json({
-      success: true,
-      data: {
-        marketOverview: {
-          averagePrices: avgPrices,
-          volatility,
-          spreads,
-        },
-        supplyConstraints,
-        portfolioAnalysis: {
-          totalValue: portfolioValue,
-          riskLevel: weightedRisk > 0.1 ? "high" : weightedRisk > 0.05 ? "medium" : "low",
-          weightedRisk,
-          itemCount: inventory.length,
-        },
-        recommendations: {
-          hedgeRatio: calculateHedgeRatio(volatility, spreads),
-          suggestedActions: generateSuggestedActions(volatility, spreads, supplyConstraints),
-        },
-      },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function getHedgeRecommendationById(req: AuthRequest, res: Response) {
-  try {
-    const { id } = req.params;
-    const userId = req.userId;
-    
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+      
+      // Small delay to avoid rate limiting
+      if (phones.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (error) {
+      results.push({ phone, success: false });
+      failed++;
     }
-    
-    // Get all user recommendations and filter by ID
-    const recommendations = await storage.getHedgeRecommendations(userId);
-    const recommendation = recommendations.find(r => r.id === id);
-    
-    if (!recommendation) {
-      return res.status(404).json({ success: false, message: "Hedge recommendation not found" });
-    }
-    
-    return res.json({
-      success: true,
-      data: recommendation,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
   }
+
+  return {
+    total: phones.length,
+    successful,
+    failed,
+    results,
+  };
 }
 
-export async function deleteHedgeRecommendation(req: AuthRequest, res: Response) {
-  try {
-    const { id } = req.params;
-    const userId = req.userId;
-    
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-    
-    // Since we don't have a delete method, we'll just return success
-    // In a real implementation, you would delete from storage
-    console.log(`User ${userId} deleted recommendation ${id}`);
-    
-    return res.json({
-      success: true,
-      message: "Hedge recommendation deleted successfully",
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
+/**
+ * Verify if a phone number is valid
+ * @param phone Phone number to verify
+ * @returns boolean indicating if valid
+ */
+export function isValidPhoneNumber(phone: string): boolean {
+  // Remove any non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  
+  // Check if it's a Nigerian number (11 digits starting with 0, or 13 digits starting with 234)
+  const isValidNigerian = (digits.length === 11 && digits.startsWith('0')) ||
+                          (digits.length === 13 && digits.startsWith('234'));
+  
+  // Basic international format check
+  const isValidInternational = digits.length >= 10 && digits.length <= 15 && phone.startsWith('+');
+  
+  return isValidNigerian || isValidInternational;
 }
 
-// Helper functions
-function calculateHedgeRatio(volatility: Record<string, number>, spreads: any): number {
-  const avgVolatility = Object.values(volatility).reduce((a, b) => a + b, 0) / Object.keys(volatility).length;
-  const maxSpread = Math.max(Math.abs(spreads.PMS_AGO), Math.abs(spreads.PMS_DPK), Math.abs(spreads.AGO_DPK));
-  
-  // Simple hedge ratio calculation
-  let ratio = 0.5;
-  if (avgVolatility > 0.1) ratio += 0.2;
-  if (maxSpread > 50) ratio += 0.1;
-  
-  return Math.min(0.9, Math.max(0.3, ratio));
+/**
+ * Get SMS service status
+ * @returns Status object
+ */
+export function getSmsStatus(): {
+  enabled: boolean;
+  provider: string;
+  configured: boolean;
+} {
+  const provider = SMS_PROVIDER;
+  let configured = true;
+
+  if (provider === 'twilio') {
+    configured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+  } else if (provider === 'africastalking') {
+    configured = !!(process.env.AFRICASTALKING_USERNAME && process.env.AFRICASTALKING_API_KEY);
+  }
+
+  return {
+    enabled: SMS_ENABLED,
+    provider,
+    configured,
+  };
 }
 
-function generateSuggestedActions(
-  volatility: Record<string, number>, 
-  spreads: any, 
-  supplyConstraints: any[]
-): string[] {
-  const actions = [];
-  
-  if (volatility.PMS > 0.1) {
-    actions.push("Consider forward contracts for PMS due to high volatility");
-  }
-  
-  if (Math.abs(spreads.PMS_AGO) > 40) {
-    actions.push(`Spread trade opportunity: ${spreads.PMS_AGO > 0 ? 'AGO over PMS' : 'PMS over AGO'}`);
-  }
-  
-  if (supplyConstraints.length > 0) {
-    actions.push(`Build inventory at ${supplyConstraints.length} terminals with supply constraints`);
-  }
-  
-  if (actions.length === 0) {
-    actions.push("Market conditions stable. Maintain current hedge positions.");
-  }
-  
-  return actions;
-}
+// For backward compatibility, also export as sendSMS (but marked as deprecated)
+/**
+ * @deprecated Use sendSms instead
+ */
+export const sendSMS = sendSms;
+
+export default {
+  sendSms,
+  sendBulkSms,
+  sendSmsToMany,
+  isValidPhoneNumber,
+  getSmsStatus,
+};
