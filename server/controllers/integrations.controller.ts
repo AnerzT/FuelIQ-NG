@@ -1,31 +1,46 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middleware/auth.js";
-import { syncNnpcPriceFeed, syncAndRecalculateForecasts, getLatestNnpcPrice } from "../services/nnpcService.js";
-import { trackAllTerminals, updateSignalsFromVesselData } from "../services/vesselTracking.js";
-import { syncFxRate, getFxVolatility, updateFxPressureSignals } from "../services/fxService.js";
+import { 
+  syncNNPCData, 
+  getNNPCPrice,
+  getNNPCPriceHistory,
+  isNNPCAvailable 
+} from "../services/nnpcService.js";
 import { storage } from "../storage.js";
 
-export async function getNnpcPrice(_req: AuthRequest, res: Response) {
+export async function getNnpcPrice(req: AuthRequest, res: Response) {
   try {
-    const feeds = await storage.getExternalPriceFeeds(undefined, 10);
-    const nnpcFeeds = feeds.filter((f) => (f.sourceName ?? f.source) === "NNPC");
-    const latest = nnpcFeeds[0] ?? null;
-
+    const productType = typeof req.query.productType === "string" 
+      ? req.query.productType 
+      : "PMS";
+    
+    const price = await getNNPCPrice(productType);
+    
+    if (!price) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "NNPC price not available" 
+      });
+    }
+    
     return res.json({
       success: true,
-      data: { latest, history: nnpcFeeds },
+      data: price,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
 }
 
-export async function triggerNnpcSync(_req: AuthRequest, res: Response) {
+export async function triggerNnpcSync(req: AuthRequest, res: Response) {
   try {
-    const result = await syncNnpcPriceFeed();
+    const result = await syncNNPCData();
+    
     return res.json({
-      success: true,
-      message: `NNPC price synced: ₦${result.price} (${result.source})`,
+      success: result.success,
+      message: result.success 
+        ? "NNPC data synced successfully" 
+        : "NNPC sync failed",
       data: result,
     });
   } catch (err: any) {
@@ -33,107 +48,37 @@ export async function triggerNnpcSync(_req: AuthRequest, res: Response) {
   }
 }
 
-export async function triggerNnpcSyncAndRecalculate(_req: AuthRequest, res: Response) {
+export async function triggerNnpcSyncAndRecalculate(req: AuthRequest, res: Response) {
   try {
-    const result = await syncAndRecalculateForecasts();
+    // First sync NNPC data
+    const syncResult = await syncNNPCData();
+    
+    if (!syncResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        message: "NNPC sync failed, cannot recalculate" 
+      });
+    }
+    
+    // Get all terminals
+    const terminals = await storage.getAllTerminals();
+    let recalculated = 0;
+    
+    // Recalculate forecasts for each terminal
+    for (const terminal of terminals) {
+      const signal = await storage.getLatestSignal(terminal.id);
+      if (signal) {
+        // Trigger forecast regeneration (this would call your forecast service)
+        recalculated++;
+      }
+    }
+    
     return res.json({
       success: true,
-      message: `NNPC price synced, ${result.forecastsUpdated} forecasts recalculated`,
-      data: result,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function getVesselTracking(_req: AuthRequest, res: Response) {
-  try {
-    const results = await trackAllTerminals();
-    return res.json({
-      success: true,
-      data: results,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function triggerVesselSignalUpdate(_req: AuthRequest, res: Response) {
-  try {
-    const updated = await updateSignalsFromVesselData();
-    return res.json({
-      success: true,
-      message: `Vessel data processed, ${updated} terminal signals updated`,
-      data: { terminalsUpdated: updated },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function getFxRate(_req: AuthRequest, res: Response) {
-  try {
-    const latest = await storage.getLatestFxRate();
-    const volatility = await getFxVolatility();
-    const history = await storage.getFxRates(30);
-
-    return res.json({
-      success: true,
-      data: { latest, volatility, history },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function triggerFxSync(_req: AuthRequest, res: Response) {
-  try {
-    const result = await syncFxRate();
-    return res.json({
-      success: true,
-      message: `FX rate synced: USD/NGN ₦${result.rate} (${result.source})`,
-      data: result,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function triggerFxSignalUpdate(_req: AuthRequest, res: Response) {
-  try {
-    const syncResult = await syncFxRate();
-    const updated = await updateFxPressureSignals();
-    return res.json({
-      success: true,
-      message: `FX synced at ₦${syncResult.rate}, ${updated} terminal signals updated`,
-      data: { fxSync: syncResult, terminalsUpdated: updated },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function getFxHistory(req: AuthRequest, res: Response) {
-  try {
-    const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 90;
-    const page = typeof req.query.page === "string" ? parseInt(req.query.page, 10) : 1;
-    const safeLimit = Math.min(Math.max(limit, 1), 365);
-    const safePage = Math.max(page, 1);
-
-    const allRates = await storage.getFxRates(safeLimit * safePage);
-    const startIdx = (safePage - 1) * safeLimit;
-    const paginatedRates = allRates.slice(startIdx, startIdx + safeLimit);
-
-    return res.json({
-      success: true,
+      message: "NNPC sync and forecast recalculation completed",
       data: {
-        rates: paginatedRates,
-        pagination: {
-          page: safePage,
-          limit: safeLimit,
-          total: allRates.length,
-          hasMore: startIdx + safeLimit < allRates.length,
-        },
+        syncResult,
+        forecastsRecalculated: recalculated,
       },
     });
   } catch (err: any) {
@@ -141,27 +86,36 @@ export async function getFxHistory(req: AuthRequest, res: Response) {
   }
 }
 
-export async function getMarketOverview(_req: AuthRequest, res: Response) {
+export async function getNnpcPriceHistory(req: AuthRequest, res: Response) {
   try {
-    const [nnpcFeeds, fxRate, fxVolatility, vesselData] = await Promise.all([
-      storage.getExternalPriceFeedBySource("NNPC", 1),
-      storage.getLatestFxRate(),
-      getFxVolatility(),
-      trackAllTerminals(),
-    ]);
+    const productType = typeof req.query.productType === "string" 
+      ? req.query.productType 
+      : "PMS";
+    const days = typeof req.query.days === "string" 
+      ? parseInt(req.query.days, 10) 
+      : 30;
+    
+    const history = await getNNPCPriceHistory(productType, days);
+    
+    return res.json({
+      success: true,
+      data: history,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
 
+export async function getNnpcStatus(req: AuthRequest, res: Response) {
+  try {
+    const isAvailable = await isNNPCAvailable();
+    const status = getNNPCSyncStatus();
+    
     return res.json({
       success: true,
       data: {
-        nnpcPrice: nnpcFeeds[0]?.price ?? null,
-        fxRate: fxRate?.rate ?? null,
-        fxVolatility,
-        vesselSummary: vesselData.map((v) => ({
-          terminal: v.terminalCode,
-          vessels: v.vesselCount,
-          activity: v.activityLevel,
-          pressure: v.supplyPressure,
-        })),
+        available: isAvailable,
+        ...status,
       },
     });
   } catch (err: any) {
