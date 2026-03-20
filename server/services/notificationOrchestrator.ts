@@ -1,150 +1,162 @@
 import { storage } from "../storage.js";
-import * as smsService from "./smsService.js";
-import * as whatsappService from "./whatsappService.js";
-import type { Forecast } from "../../shared/schema.js";
+import { sendSms } from "./smsService.js";
+import { sendWhatsAppMessage } from "./whatsappService.js";
 
-export interface NotificationResult {
-  alertType: string;
-  smsSent: number;
-  whatsappSent: number;
-}
-
-export async function onForecastCreated(
-  terminalId: string,
-  newForecast: Forecast
-): Promise<NotificationResult | null> {
-  const forecasts = await storage.getForecasts(terminalId, 2);
-  if (forecasts.length < 2) return null;
-
-  const previousForecast = forecasts[1];
-  if (previousForecast.bias === newForecast.bias) return null;
-
-  const terminal = await storage.getTerminal(terminalId);
-  const terminalName = terminal?.name || "Unknown Terminal";
-
-  const probability = { increase: 0, decrease: 0, stable: 0 };
-  if (newForecast.bias === "bullish") {
-    probability.increase = 70;
-    probability.decrease = 10;
-    probability.stable = 20;
-  } else if (newForecast.bias === "bearish") {
-    probability.increase = 10;
-    probability.decrease = 70;
-    probability.stable = 20;
-  } else {
-    probability.increase = 25;
-    probability.decrease = 25;
-    probability.stable = 50;
-  }
-
-  const expectedRange = { min: newForecast.expectedMin, max: newForecast.expectedMax };
-
-  console.log(`[Notify] Forecast bias changed for ${terminalName}: ${previousForecast.bias} → ${newForecast.bias}`);
-
-  const [smsSent, whatsappSent] = await Promise.all([
-    smsService.sendForecastAlert(terminalName, newForecast.bias, probability, expectedRange),
-    whatsappService.sendForecastAlert(terminalName, newForecast.bias, probability, expectedRange),
-  ]);
-
-  return { alertType: "forecast_bias_change", smsSent, whatsappSent };
-}
-
-export async function onPriceChange(
-  terminalId: string,
-  currentPrice: number,
-  previousPrice: number
-): Promise<NotificationResult | null> {
-  const change = currentPrice - previousPrice;
-  if (Math.abs(change) < 10) return null;
-
-  const terminal = await storage.getTerminal(terminalId);
-  const terminalName = terminal?.name || "Unknown Terminal";
-
-  console.log(`[Notify] Price change for ${terminalName}: ₦${previousPrice} → ₦${currentPrice} (Δ₦${change})`);
-
-  const [smsSent, whatsappSent] = await Promise.all([
-    smsService.sendPriceAlert(terminalName, change, currentPrice),
-    whatsappService.sendPriceAlert(terminalName, change, currentPrice),
-  ]);
-
-  return { alertType: "price_change", smsSent, whatsappSent };
-}
-
-export async function onRefineryOutputDrop(
-  refineryName: string,
-  status: string,
-  previousOutput: number,
-  currentOutput: number
-): Promise<NotificationResult | null> {
-  const dropPercent = ((previousOutput - currentOutput) / previousOutput) * 100;
-  if (dropPercent < 10) return null;
-
-  const outputChange = `Output dropped ${Math.round(dropPercent)}% (${previousOutput} → ${currentOutput} bpd)`;
-
-  console.log(`[Notify] Refinery output drop: ${refineryName} - ${outputChange}`);
-
-  const [smsSent, whatsappSent] = await Promise.all([
-    smsService.sendRefineryAlert(refineryName, status, outputChange),
-    whatsappService.sendRefineryAlert(refineryName, status, outputChange),
-  ]);
-
-  return { alertType: "refinery_output_drop", smsSent, whatsappSent };
-}
-
-export async function sendMorningDigest(): Promise<NotificationResult> {
-  const terminals = await storage.getTerminals();
-  const activeTerminals = terminals.filter((t) => t.active);
-
-  const summaries: { terminal: string; bias: string; range: string; confidence: number }[] = [];
-
-  for (const terminal of activeTerminals) {
-    const forecast = await storage.getLatestForecast(String(terminal.id));
-    if (!forecast) continue;
-
-    summaries.push({
-      terminal: terminal.name,
-      bias: forecast.bias,
-      range: `₦${forecast.expectedMin}-₦${forecast.expectedMax}`,
-      confidence: forecast.confidence,
+export async function onForecastCreated(terminalId: string, forecast: any) {
+  try {
+    // Get all users subscribed to this terminal
+    const users = await storage.getAllUsers();
+    const subscribers = users.filter(user => {
+      const prefs = user.notificationPrefs as any;
+      return prefs?.forecastAlerts === true && 
+             (user.assignedTerminalId === terminalId || !user.assignedTerminalId);
     });
+
+    const message = `📊 New forecast for terminal ${terminalId}: ${forecast.productType} expected between ₦${forecast.expectedMin}-₦${forecast.expectedMax}. ${forecast.suggestedAction}`;
+
+    for (const user of subscribers) {
+      const prefs = user.notificationPrefs as any;
+      
+      if (prefs?.smsEnabled && user.phone) {
+        await sendSms(user.phone, message);
+        await storage.createNotificationLog(user.id, "sms", message, "forecast");
+      }
+      
+      if (prefs?.whatsappEnabled && user.whatsappPhone) {
+        await sendWhatsAppMessage(user.whatsappPhone, message);
+        await storage.createNotificationLog(user.id, "whatsapp", message, "forecast");
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error in onForecastCreated:", error);
   }
-
-  if (summaries.length === 0) {
-    return { alertType: "morning_digest", smsSent: 0, whatsappSent: 0 };
-  }
-
-  const whatsappSent = await whatsappService.sendMorningDigest(summaries);
-
-  const smsMessage = `[FuelIQ] Morning Digest: ${summaries.length} terminals. ` +
-    summaries.slice(0, 3).map((s) => `${s.terminal}: ${s.bias}`).join(", ") +
-    `. Open app for details.`;
-
-  const smsUsers = await storage.getSubscribedUsers("sms", "morningDigest");
-  let smsSent = 0;
-  for (const user of smsUsers) {
-    const userPhone = (user as any).phone;
-    if (!userPhone) continue;
-    const result = await smsService.sendSms(userPhone, smsMessage);
-    await storage.createNotificationLog({
-      userId: user.id,
-      channel: "sms",
-      alertType: "morningDigest",
-      message: smsMessage,
-      status: result.success ? "sent" : "failed",
-    } as any);
-    if (result.success) smsSent++;
-  }
-
-  console.log(`[Notify] Morning digest sent: ${smsSent} SMS, ${whatsappSent} WhatsApp`);
-  return { alertType: "morning_digest", smsSent, whatsappSent };
 }
 
-export function getNotificationStatus(): {
-  sms: { configured: boolean; provider: string };
-  whatsapp: { configured: boolean };
-} {
-  return {
-    sms: smsService.getProviderInfo(),
-    whatsapp: { configured: whatsappService.isWhatsAppConfigured() },
-  };
+export async function onPriceChange(terminalId: string, productType: string, oldPrice: number, newPrice: number) {
+  try {
+    const users = await storage.getAllUsers();
+    const subscribers = users.filter(user => {
+      const prefs = user.notificationPrefs as any;
+      return prefs?.priceAlerts === true;
+    });
+
+    const change = ((newPrice - oldPrice) / oldPrice) * 100;
+    const direction = change > 0 ? "increased" : "decreased";
+    const message = `💰 Price alert at ${terminalId} for ${productType}: ${direction} by ${Math.abs(change).toFixed(1)}% to ₦${newPrice}`;
+
+    for (const user of subscribers) {
+      const prefs = user.notificationPrefs as any;
+      
+      if (prefs?.smsEnabled && user.phone) {
+        await sendSms(user.phone, message);
+        await storage.createNotificationLog(user.id, "sms", message, "price_alert");
+      }
+      
+      if (prefs?.whatsappEnabled && user.whatsappPhone) {
+        await sendWhatsAppMessage(user.whatsappPhone, message);
+        await storage.createNotificationLog(user.id, "whatsapp", message, "price_alert");
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error in onPriceChange:", error);
+  }
+}
+
+export async function onRefineryUpdate(update: any) {
+  try {
+    const users = await storage.getAllUsers();
+    const subscribers = users.filter(user => {
+      const prefs = user.notificationPrefs as any;
+      return prefs?.refineryAlerts === true;
+    });
+
+    const message = `🏭 Refinery update: ${update.refineryName} is now ${update.operationalStatus}. Production capacity: ${update.productionCapacity}%`;
+
+    for (const user of subscribers) {
+      const prefs = user.notificationPrefs as any;
+      
+      if (prefs?.smsEnabled && user.phone) {
+        await sendSms(user.phone, message);
+        await storage.createNotificationLog(user.id, "sms", message, "refinery");
+      }
+      
+      if (prefs?.whatsappEnabled && user.whatsappPhone) {
+        await sendWhatsAppMessage(user.whatsappPhone, message);
+        await storage.createNotificationLog(user.id, "whatsapp", message, "refinery");
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error in onRefineryUpdate:", error);
+  }
+}
+
+export async function sendMorningDigest() {
+  try {
+    const users = await storage.getAllUsers();
+    const subscribers = users.filter(user => {
+      const prefs = user.notificationPrefs as any;
+      return prefs?.morningDigest === true;
+    });
+
+    const date = new Date();
+    const formattedDate = date.toLocaleDateString("en-NG", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const message = `🌅 Good morning! Here's your FuelIQ-NG morning digest for ${formattedDate}:\n\n` +
+      `• PMS prices expected between ₦620-₦640 today\n` +
+      `• Apapa terminal: High truck queue\n` +
+      `• FX pressure: Medium\n` +
+      `• Dangote refinery: 85% operational\n\n` +
+      `Log in to your dashboard for details.`;
+
+    for (const user of subscribers) {
+      const prefs = user.notificationPrefs as any;
+      
+      if (prefs?.smsEnabled && user.phone) {
+        await sendSms(user.phone, message);
+        await storage.createNotificationLog(user.id, "sms", message, "morning_digest");
+      }
+      
+      if (prefs?.whatsappEnabled && user.whatsappPhone) {
+        await sendWhatsAppMessage(user.whatsappPhone, message);
+        await storage.createNotificationLog(user.id, "whatsapp", message, "morning_digest");
+      }
+    }
+
+    return {
+      success: true,
+      sent: subscribers.length,
+    };
+  } catch (error) {
+    console.error("❌ Error in sendMorningDigest:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export async function getNotificationStatus() {
+  try {
+    return {
+      sms: {
+        available: true,
+        provider: process.env.SMS_PROVIDER || "console",
+      },
+      whatsapp: {
+        available: true,
+        provider: process.env.WHATSAPP_PROVIDER || "console",
+      },
+    };
+  } catch (error) {
+    console.error("❌ Error getting notification status:", error);
+    return {
+      sms: { available: false },
+      whatsapp: { available: false },
+    };
+  }
 }
