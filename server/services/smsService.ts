@@ -15,38 +15,54 @@ class MockSmsService {
   }
 }
 
-// Twilio SMS service
+// Twilio SMS service with safe dynamic import
 class TwilioSmsService {
-  private client: any;
+  private client: any = null;
   private fromNumber: string;
+  private initialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
+    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || SMS_FROM;
+    this.initPromise = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || SMS_FROM;
 
     if (!accountSid || !authToken) {
       console.warn("⚠️ Twilio credentials not configured, falling back to mock SMS");
-      this.client = null;
-    } else {
-      try {
-        // Dynamic import to avoid requiring twilio in all environments
-        import('twilio').then(twilio => {
-          this.client = twilio(accountSid, authToken);
-          console.log("✅ Twilio SMS service initialized");
-        }).catch(err => {
-          console.error("❌ Failed to load twilio package:", err);
-          this.client = null;
-        });
-      } catch (err) {
-        console.error("❌ Failed to initialize Twilio:", err);
-        this.client = null;
+      this.initialized = false;
+      return;
+    }
+
+    try {
+      // Safe dynamic import with try-catch
+      const twilioModule = await import('twilio').catch(() => null);
+      if (!twilioModule) {
+        console.warn("⚠️ Twilio package not installed, falling back to mock SMS");
+        this.initialized = false;
+        return;
       }
+      
+      const twilio = twilioModule.default || twilioModule;
+      this.client = twilio(accountSid, authToken);
+      this.initialized = true;
+      console.log("✅ Twilio SMS service initialized");
+    } catch (err) {
+      console.warn("⚠️ Failed to initialize Twilio, falling back to mock SMS");
+      this.initialized = false;
     }
   }
 
   async send(phone: string, message: string): Promise<boolean> {
-    if (!this.client) {
+    // Wait for initialization
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+
+    if (!this.initialized || !this.client) {
       // Fallback to mock
       const mockService = new MockSmsService();
       return mockService.send(phone, message);
@@ -88,24 +104,52 @@ class TwilioSmsService {
   }
 }
 
-// Africa's Talking SMS service
+// Africa's Talking SMS service with safe dynamic import
 class AfricaIsTalkingSmsService {
   private username: string;
   private apiKey: string;
   private from: string;
+  private initialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
     this.username = process.env.AFRICASTALKING_USERNAME || '';
     this.apiKey = process.env.AFRICASTALKING_API_KEY || '';
     this.from = process.env.SMS_FROM || 'FuelIQ-NG';
+    this.initPromise = this.initialize();
+  }
 
+  private async initialize(): Promise<void> {
     if (!this.username || !this.apiKey) {
       console.warn("⚠️ Africa's Talking credentials not configured, falling back to mock SMS");
+      this.initialized = false;
+      return;
+    }
+
+    try {
+      // Safe dynamic import with try-catch
+      const africastalkingModule = await import('africastalking').catch(() => null);
+      if (!africastalkingModule) {
+        console.warn("⚠️ Africa's Talking package not installed, falling back to mock SMS");
+        this.initialized = false;
+        return;
+      }
+      
+      this.initialized = true;
+      console.log("✅ Africa's Talking SMS service initialized");
+    } catch (err) {
+      console.warn("⚠️ Failed to initialize Africa's Talking, falling back to mock SMS");
+      this.initialized = false;
     }
   }
 
   async send(phone: string, message: string): Promise<boolean> {
-    if (!this.username || !this.apiKey) {
+    // Wait for initialization
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+
+    if (!this.initialized) {
       // Fallback to mock
       const mockService = new MockSmsService();
       return mockService.send(phone, message);
@@ -115,26 +159,28 @@ class AfricaIsTalkingSmsService {
       // Format phone number for Africa's Talking
       const formattedPhone = this.formatPhoneNumber(phone);
       
-      // Dynamic import to avoid requiring the package in all environments
-      import('africastalking').then(africastalking => {
-        const client = africastalking({
-          username: this.username,
-          apiKey: this.apiKey,
-        });
-        
-        return client.SMS.send({
-          to: [formattedPhone],
-          message: message,
-          from: this.from,
-        });
-      }).then(response => {
-        console.log(`✅ SMS sent to ${formattedPhone} via Africa's Talking`, response);
-        return true;
-      }).catch(err => {
-        console.error("❌ Failed to send SMS via Africa's Talking:", err);
-        return false;
+      // Dynamic import inside send method with safe catch
+      const africastalkingModule = await import('africastalking').catch(() => null);
+      if (!africastalkingModule) {
+        console.warn("⚠️ Africa's Talking package not available, using mock");
+        const mockService = new MockSmsService();
+        return mockService.send(phone, message);
+      }
+      
+      const africastalking = africastalkingModule.default || africastalkingModule;
+      
+      const client = africastalking({
+        username: this.username,
+        apiKey: this.apiKey,
+      });
+      
+      const response = await client.SMS.send({
+        to: [formattedPhone],
+        message: message,
+        from: this.from,
       });
 
+      console.log(`✅ SMS sent to ${formattedPhone} via Africa's Talking`);
       return true;
     } catch (error) {
       console.error("❌ Failed to send SMS via Africa's Talking:", error);
