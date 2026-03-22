@@ -5,7 +5,7 @@ import type { AuthRequest } from "../middleware/auth.js";
 import { computeForecast } from "../services/forecastEngine.js";
 import { computeForecastScore } from "../services/forecastScoring.js";
 import { onForecastCreated } from "../services/notificationOrchestrator.js";
-import { ensureString, ensureNumber, ensureEnum, parsePagination } from "../utils/params.js";
+import { ensureString, ensureNumber, parsePagination } from "../utils/params.js";
 
 export async function getMultiProductForecasts(req: AuthRequest, res: Response) {
   try {
@@ -150,12 +150,10 @@ export async function generateForecast(req: AuthRequest, res: Response) {
 
     const forecast = await storage.createForecast(forecastData);
 
-    // Don't await this - let it run in the background
     if (req.userId) {
       storage.incrementForecastCount?.(req.userId).catch(() => {});
     }
     
-    // Don't await this - let it run in the background
     onForecastCreated(terminalId, forecast).catch((err) =>
       console.error(`[Notify] Error in forecast notification: ${err.message}`)
     );
@@ -173,8 +171,8 @@ export async function generateForecast(req: AuthRequest, res: Response) {
 
 export async function getForecastHistory(req: AuthRequest, res: Response) {
   try {
-    const terminalId = ensureString(req.query.terminalId, undefined);
-    const productType = ensureString(req.query.productType, undefined);
+    const terminalId = ensureString(req.query.terminalId);
+    const productType = ensureString(req.query.productType);
     const { page, limit, offset } = parsePagination(req.query, 50, 200);
 
     let allForecasts;
@@ -236,7 +234,6 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       storage.getFxRates(10),
     ]);
 
-    // Temporary fix - external price feed feature not implemented yet
     const nnpcFeed = null;
 
     const score = computeForecastScore({
@@ -263,7 +260,6 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
 
     const forecast = await storage.createForecast(forecastData);
 
-    // Don't await this - let it run in the background
     onForecastCreated(terminalId, forecast).catch((err) =>
       console.error(`[Notify] Error in score notification: ${err.message}`)
     );
@@ -288,65 +284,6 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
     });
   } catch (err: any) {
     console.error("Error in scoreForecast:", err);
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function getForecastStats(req: AuthRequest, res: Response) {
-  try {
-    const terminalId = ensureString(req.query.terminalId);
-    const days = ensureNumber(req.query.days, 30);
-    const productType = ensureString(req.query.productType, "PMS");
-
-    let forecasts;
-    if (terminalId) {
-      const terminal = await storage.getTerminal(terminalId);
-      if (!terminal) {
-        return res.status(404).json({ success: false, message: "Terminal not found" });
-      }
-      forecasts = await storage.getForecasts(terminalId, days);
-    } else {
-      forecasts = await storage.getAllForecasts(days);
-    }
-
-    // Filter by product type
-    const filteredForecasts = forecasts.filter(f => f.productType === productType);
-
-    // Calculate statistics
-    const prices = filteredForecasts.map(f => (f.expectedMin + f.expectedMax) / 2);
-    const avgPrice = prices.length > 0 
-      ? prices.reduce((a, b) => a + b, 0) / prices.length 
-      : 0;
-    
-    const maxPrice = Math.max(...prices, 0);
-    const minPrice = Math.min(...prices, Infinity);
-    
-    const confidenceScores = filteredForecasts.map(f => f.confidence);
-    const avgConfidence = confidenceScores.length > 0 
-      ? confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length 
-      : 0;
-
-    const biasCounts = {
-      bullish: filteredForecasts.filter(f => f.bias === "bullish").length,
-      bearish: filteredForecasts.filter(f => f.bias === "bearish").length,
-      neutral: filteredForecasts.filter(f => f.bias === "neutral").length,
-    };
-
-    return res.json({
-      success: true,
-      data: {
-        totalForecasts: filteredForecasts.length,
-        averagePrice: Math.round(avgPrice),
-        priceRange: { min: Math.round(minPrice), max: Math.round(maxPrice) },
-        averageConfidence: Math.round(avgConfidence),
-        biasDistribution: biasCounts,
-        productType,
-        terminalId: terminalId || "all",
-        days,
-      },
-    });
-  } catch (err: any) {
-    console.error("Error in getForecastStats:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 }
