@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("marketer"),
   phone: text("phone"),
   whatsappPhone: text("whatsapp_phone"),
-  notificationPrefs: jsonb("notification_prefs").default(sql`'{"smsEnabled": false, "priceAlerts": true, "morningDigest": false, "forecastAlerts": true, "refineryAlerts": true, "whatsappEnabled": false}'::jsonb`),
+  notificationPrefs: jsonb("notification_prefs"),
   subscriptionTier: text("subscription_tier").notNull().default("free"),
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
