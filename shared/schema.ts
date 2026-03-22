@@ -214,11 +214,84 @@ export const updateSubscriptionSchema = z.object({
 export type SubscriptionTier = "free" | "basic" | "pro" | "elite" | "enterprise";
 
 export const TIER_LIMITS = {
-  free:       { label: "Free",       forecasts: 3,   forecastsPerDay: 3,   smsAlerts: 0,  smsAlertsPerWeek: 0,  dataDelay: 60 },
-  basic:      { label: "Basic",      forecasts: 10,  forecastsPerDay: 10,  smsAlerts: 5,  smsAlertsPerWeek: 5,  dataDelay: 30 },
-  pro:        { label: "Pro",        forecasts: 50,  forecastsPerDay: 50,  smsAlerts: 20, smsAlertsPerWeek: 20, dataDelay: 0  },
-  elite:      { label: "Elite",      forecasts: 100, forecastsPerDay: 100, smsAlerts: 50, smsAlertsPerWeek: 50, dataDelay: 0  },
-  enterprise: { label: "Enterprise", forecasts: 999, forecastsPerDay: 999, smsAlerts: 99, smsAlertsPerWeek: 99, dataDelay: 0  },
+  free: { 
+    label: "Free", 
+    forecasts: 3, 
+    forecastsPerDay: 3, 
+    smsAlerts: 0, 
+    smsAlertsPerWeek: 0, 
+    dataDelay: 60,
+    depotSpread: false,
+    inventoryAccess: false,
+    hedgeLab: false,
+    traderSignals: false,
+    refineryUpdates: false,
+    regulationAlerts: false
+  },
+  basic: { 
+    label: "Basic", 
+    forecasts: 10, 
+    forecastsPerDay: 10, 
+    smsAlerts: 5, 
+    smsAlertsPerWeek: 5, 
+    dataDelay: 30,
+    depotSpread: false,
+    inventoryAccess: false,
+    hedgeLab: false,
+    traderSignals: false,
+    refineryUpdates: false,
+    regulationAlerts: false
+  },
+  pro: { 
+    label: "Pro", 
+    forecasts: 50, 
+    forecastsPerDay: 50, 
+    smsAlerts: 20, 
+    smsAlertsPerWeek: 20, 
+    dataDelay: 0,
+    depotSpread: true,
+    inventoryAccess: true,
+    hedgeLab: false,
+    traderSignals: false,
+    refineryUpdates: true,
+    regulationAlerts: true
+  },
+  elite: { 
+    label: "Elite", 
+    forecasts: 100, 
+    forecastsPerDay: 100, 
+    smsAlerts: 50, 
+    smsAlertsPerWeek: 50, 
+    dataDelay: 0,
+    depotSpread: true,
+    inventoryAccess: true,
+    hedgeLab: true,
+    traderSignals: true,
+    refineryUpdates: true,
+    regulationAlerts: true
+  },
+  enterprise: { 
+    label: "Enterprise", 
+    forecasts: 999, 
+    forecastsPerDay: 999, 
+    smsAlerts: 99, 
+    smsAlertsPerWeek: 99, 
+    dataDelay: 0,
+    depotSpread: true,
+    inventoryAccess: true,
+    hedgeLab: true,
+    traderSignals: true,
+    refineryUpdates: true,
+    regulationAlerts: true
+  },
+} as const;
+
+export const TIER_PRICES = {
+  free: { priceLabel: "Free", period: "forever" },
+  basic: { priceLabel: "₦5,000", period: "month" },
+  pro: { priceLabel: "₦15,000", period: "month" },
+  elite: { priceLabel: "₦50,000", period: "month" },
+  enterprise: { priceLabel: "Custom", period: "year" },
 } as const;
 
 export const PRODUCT_TYPES = ["PMS", "AGO", "DPK", "LPG"] as const;
