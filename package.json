@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --project tsconfig.server.json && vite build",
     "preview": "vite preview",
-    "start": "node api/index.js"
+    "start": "node api/index.js",
+    "build:server": "tsc --project tsconfig.server.json",
+    "build:client": "vite build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
