@@ -1,4 +1,3 @@
-// server/db.ts
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../shared/schema.js';
@@ -16,7 +15,7 @@ export async function getDb() {
   }
 
   try {
-    const client = postgres(databaseUrl, {
+    const client = postgres(databaseUrl as string, {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
