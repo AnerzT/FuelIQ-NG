@@ -9,13 +9,14 @@ let connectionPromise: Promise<ReturnType<typeof drizzle>> | null = null;
 export async function getDb() {
   if (dbInstance) return dbInstance;
   
-  if (!process.env.DATABASE_URL) {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
     console.error('❌ DATABASE_URL environment variable is not set');
     throw new Error('Database connection failed: DATABASE_URL not set');
   }
 
   try {
-    const client = postgres(process.env.DATABASE_URL, {
+    const client = postgres(databaseUrl, {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
