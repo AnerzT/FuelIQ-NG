@@ -37,6 +37,7 @@ const MOCK_NNPC_PRICES = {
 
 /**
  * Fetch current prices from NNPC API
+ * Returns null if fetch fails or no API key configured.
  */
 async function fetchNNPCPrices(): Promise<NNPCPricesResponse | null> {
   // Check if we should use mock data
