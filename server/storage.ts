@@ -41,8 +41,8 @@ export interface IStorage {
   incrementForecastCount(userId: string): Promise<void>;
   resetForecastCount(userId: string): Promise<void>;
   resetSmsCount(userId: string): Promise<void>;
-  updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined>;
   updateUserNotificationPrefs(userId: string, prefs: any): Promise<User | undefined>;
+  updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   getSubscribedUsers(): Promise<User[]>;
   createNotificationLog(userId: string, channel: string, message: string, alertType?: string): Promise<any>;
@@ -159,17 +159,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId));
   }
 
-  async updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined> {
+  async updateUserNotificationPrefs(userId: string, prefs: any): Promise<User | undefined> {
     const [updated] = await db.update(users)
-      .set(data)
+      .set({ notificationPrefs: prefs })
       .where(eq(users.id, userId))
       .returning();
     return updated;
   }
 
-  async updateUserNotificationPrefs(userId: string, prefs: any): Promise<User | undefined> {
+  async updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined> {
     const [updated] = await db.update(users)
-      .set({ notificationPrefs: prefs })
+      .set(data)
       .where(eq(users.id, userId))
       .returning();
     return updated;
@@ -332,8 +332,7 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(depotPrices.productType, productType));
     }
     
-    const results = await query.orderBy(desc(depotPrices.updatedAt));
-    return results;
+    return await query.orderBy(desc(depotPrices.updatedAt));
   }
 
   async createDepotPrice(price: any): Promise<DepotPrice> {
