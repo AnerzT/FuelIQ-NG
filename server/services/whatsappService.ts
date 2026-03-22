@@ -1,4 +1,4 @@
-import { storage } from "../storage.js";
+// server/services/whatsappService.ts
 
 // Configuration
 const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED === "true";
@@ -15,39 +15,55 @@ class MockWhatsAppService {
   }
 }
 
-// Twilio WhatsApp service
+// Twilio WhatsApp service with safe dynamic import
 class TwilioWhatsAppService {
-  private client: any;
+  private client: any = null;
   private fromNumber: string;
+  private initialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
+    // Twilio WhatsApp numbers are in format: whatsapp:+14155238886
+    this.fromNumber = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_PHONE_NUMBER || ''}`;
+    this.initPromise = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    // Twilio WhatsApp numbers are in format: whatsapp:+14155238886
-    this.fromNumber = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_PHONE_NUMBER}`;
 
     if (!accountSid || !authToken) {
       console.warn("⚠️ Twilio credentials not configured, falling back to mock WhatsApp");
-      this.client = null;
-    } else {
-      try {
-        // Dynamic import to avoid requiring twilio in all environments
-        import('twilio').then(twilio => {
-          this.client = twilio(accountSid, authToken);
-          console.log("✅ Twilio WhatsApp service initialized");
-        }).catch(err => {
-          console.error("❌ Failed to load twilio package:", err);
-          this.client = null;
-        });
-      } catch (err) {
-        console.error("❌ Failed to initialize Twilio:", err);
-        this.client = null;
+      this.initialized = false;
+      return;
+    }
+
+    try {
+      // Safe dynamic import with try-catch
+      const twilioModule = await import('twilio').catch(() => null);
+      if (!twilioModule) {
+        console.warn("⚠️ Twilio package not installed, falling back to mock WhatsApp");
+        this.initialized = false;
+        return;
       }
+      
+      const twilio = twilioModule.default || twilioModule;
+      this.client = twilio(accountSid, authToken);
+      this.initialized = true;
+      console.log("✅ Twilio WhatsApp service initialized");
+    } catch (err) {
+      console.warn("⚠️ Failed to initialize Twilio WhatsApp, falling back to mock");
+      this.initialized = false;
     }
   }
 
   async send(phone: string, message: string): Promise<boolean> {
-    if (!this.client) {
+    // Wait for initialization
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+
+    if (!this.initialized || !this.client) {
       // Fallback to mock
       const mockService = new MockWhatsAppService();
       return mockService.send(phone, message);
@@ -88,7 +104,11 @@ class TwilioWhatsAppService {
       return `whatsapp:+${digits}`;
     }
     
-    return `whatsapp:+${digits}`;
+    if (!phone.startsWith('+')) {
+      return `whatsapp:+${digits}`;
+    }
+    
+    return `whatsapp:${phone}`;
   }
 }
 
