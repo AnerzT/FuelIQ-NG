@@ -16,6 +16,8 @@ export async function getTraderSignals(req: AuthRequest, res: Response) {
 export async function submitTraderSignal(req: AuthRequest, res: Response) {
   try {
     const userId = ensureString(req.userId);
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
     const body = req.body;
     const signal = await storage.createTraderSignal({
       userId,
