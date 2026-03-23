@@ -16,9 +16,7 @@ export async function adminToggleTerminal(req: AuthRequest, res: Response) {
   try {
     const id = ensureString(req.params.id);
     const terminal = await storage.getTerminal(id);
-    if (!terminal) {
-      return res.status(404).json({ success: false, message: "Terminal not found" });
-    }
+    if (!terminal) return res.status(404).json({ success: false, message: "Terminal not found" });
     const updated = await storage.updateTerminal(id, { active: !terminal.active });
     return res.json({ success: true, data: updated });
   } catch (err: any) {
