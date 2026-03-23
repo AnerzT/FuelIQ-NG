@@ -7,7 +7,7 @@ export async function getSignals(req: AuthRequest, res: Response) {
   try {
     const terminalId = ensureString(req.params.terminalId);
     const signal = await storage.getLatestSignal(terminalId);
-    if (!signal) return res.status(404).json({ success: false, message: "No signals" });
+    if (!signal) return res.status(404).json({ success: false, message: "No signals available" });
     return res.json({ success: true, data: signal });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -20,6 +20,7 @@ export async function createSignal(req: AuthRequest, res: Response) {
     const terminalId = ensureString(body.terminalId);
     const terminal = await storage.getTerminal(terminalId);
     if (!terminal) return res.status(404).json({ success: false, message: "Terminal not found" });
+
     const signal = await storage.createSignal({
       terminalId,
       productType: ensureString(body.productType, "PMS"),
