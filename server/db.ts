@@ -15,7 +15,7 @@ export async function getDb() {
   }
 
   try {
-    const client = postgres(databaseUrl as string, {
+    const client = postgres(databaseUrl as any, {   // ← type assertion
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
