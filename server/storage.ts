@@ -52,7 +52,7 @@ export interface IStorage {
   getTerminal(id: string): Promise<Terminal | undefined>;
   getTerminalByCode(code: string): Promise<Terminal | undefined>;
   getAllTerminals(): Promise<Terminal[]>;
-  getTerminals(): Promise<Terminal[]>; // Alias for getAllTerminals
+  getTerminals(): Promise<Terminal[]>;
   updateTerminal(id: string, data: Partial<Terminal>): Promise<Terminal | undefined>;
   
   // Forecasts
@@ -129,39 +129,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
-    const [updated] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    const [updated] = await db.update(users).set(data as any).where(eq(users.id, id)).returning();
     return updated;
   }
 
   async incrementForecastCount(userId: string): Promise<void> {
     await db.update(users)
-      .set({ 
-        forecastsUsedToday: sql`${users.forecastsUsedToday} + 1` 
-      })
+      .set({ forecastsUsedToday: sql`${users.forecastsUsedToday} + 1` } as any)
       .where(eq(users.id, userId));
   }
 
   async resetForecastCount(userId: string): Promise<void> {
     await db.update(users)
-      .set({ 
-        forecastsUsedToday: 0, 
-        forecastDayResetDate: new Date() 
-      })
+      .set({ forecastsUsedToday: 0, forecastDayResetDate: new Date() } as any)
       .where(eq(users.id, userId));
   }
 
   async resetSmsCount(userId: string): Promise<void> {
     await db.update(users)
-      .set({ 
-        smsAlertsUsedThisWeek: 0, 
-        smsWeekResetDate: new Date() 
-      })
+      .set({ smsAlertsUsedThisWeek: 0, smsWeekResetDate: new Date() } as any)
       .where(eq(users.id, userId));
   }
 
   async updateUserNotificationPrefs(userId: string, prefs: any): Promise<User | undefined> {
     const [updated] = await db.update(users)
-      .set({ notificationPrefs: prefs })
+      .set({ notificationPrefs: prefs } as any)
       .where(eq(users.id, userId))
       .returning();
     return updated;
@@ -169,7 +161,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined> {
     const [updated] = await db.update(users)
-      .set(data)
+      .set(data as any)
       .where(eq(users.id, userId))
       .returning();
     return updated;
@@ -188,20 +180,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNotificationLog(userId: string, channel: string, message: string, alertType: string = "general"): Promise<any> {
-    // Since notification_logs might not exist in schema yet, we'll return a mock
     console.log(`📝 Notification log: ${userId} - ${channel} - ${alertType}`);
-    return { 
-      id: "mock-" + Date.now(), 
-      userId, 
-      channel, 
-      message, 
-      alertType, 
-      createdAt: new Date() 
-    };
+    return { id: "mock-" + Date.now(), userId, channel, message, alertType, createdAt: new Date() };
   }
 
   async getNotificationLogs(userId: string, limit: number = 50): Promise<any[]> {
-    // Return empty array for now - implement when table exists
     return [];
   }
 
@@ -324,14 +307,8 @@ export class DatabaseStorage implements IStorage {
   // ===== DEPOT PRICES =====
   async getDepotPrices(depotId?: string, productType?: string): Promise<DepotPrice[]> {
     let query = db.select().from(depotPrices);
-    
-    if (depotId) {
-      query = query.where(eq(depotPrices.depotId, depotId));
-    }
-    if (productType) {
-      query = query.where(eq(depotPrices.productType, productType));
-    }
-    
+    if (depotId) query = query.where(eq(depotPrices.depotId, depotId));
+    if (productType) query = query.where(eq(depotPrices.productType, productType));
     return await query.orderBy(desc(depotPrices.updatedAt));
   }
 
@@ -342,7 +319,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined> {
     const [updated] = await db.update(depotPrices)
-      .set({ price, updatedAt: new Date() })
+      .set({ price, updatedAt: new Date() } as any)
       .where(eq(depotPrices.id, id))
       .returning();
     return updated;
@@ -350,40 +327,25 @@ export class DatabaseStorage implements IStorage {
 
   // ===== REFINERY UPDATES =====
   async getRefineryUpdates(limit: number = 20): Promise<RefineryUpdate[]> {
-    return await db.select()
-      .from(refineryUpdates)
-      .orderBy(desc(refineryUpdates.createdAt))
-      .limit(limit);
+    return await db.select().from(refineryUpdates).orderBy(desc(refineryUpdates.createdAt)).limit(limit);
   }
 
   // ===== REGULATION UPDATES =====
   async getRegulationUpdates(limit: number = 20): Promise<RegulationUpdate[]> {
-    return await db.select()
-      .from(regulationUpdates)
-      .orderBy(desc(regulationUpdates.createdAt))
-      .limit(limit);
+    return await db.select().from(regulationUpdates).orderBy(desc(regulationUpdates.createdAt)).limit(limit);
   }
 
   async getHighImpactRegulations(): Promise<RegulationUpdate[]> {
-    return await db.select()
-      .from(regulationUpdates)
-      .where(eq(regulationUpdates.impactLevel, "high"))
-      .orderBy(desc(regulationUpdates.createdAt));
+    return await db.select().from(regulationUpdates).where(eq(regulationUpdates.impactLevel, "high")).orderBy(desc(regulationUpdates.createdAt));
   }
 
   // ===== FX RATES =====
   async getFxRates(limit: number = 10): Promise<FxRate[]> {
-    return await db.select()
-      .from(fxRates)
-      .orderBy(desc(fxRates.createdAt))
-      .limit(limit);
+    return await db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(limit);
   }
 
   async getLatestFxRate(): Promise<FxRate | undefined> {
-    const [rate] = await db.select()
-      .from(fxRates)
-      .orderBy(desc(fxRates.createdAt))
-      .limit(1);
+    const [rate] = await db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(1);
     return rate;
   }
 
@@ -394,9 +356,7 @@ export class DatabaseStorage implements IStorage {
 
   // ===== INVENTORY =====
   async getInventory(userId: string): Promise<Inventory[]> {
-    return await db.select()
-      .from(inventory)
-      .where(eq(inventory.userId, userId));
+    return await db.select().from(inventory).where(eq(inventory.userId, userId));
   }
 
   async getInventoryItem(id: string): Promise<Inventory | undefined> {
@@ -411,7 +371,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateInventory(id: string, data: Partial<Inventory>): Promise<Inventory | undefined> {
     const [updated] = await db.update(inventory)
-      .set({ ...data, lastUpdated: new Date() })
+      .set({ ...data, lastUpdated: new Date() } as any)
       .where(eq(inventory.id, id))
       .returning();
     return updated;
@@ -419,10 +379,7 @@ export class DatabaseStorage implements IStorage {
 
   // ===== TRANSACTIONS =====
   async getTransactions(inventoryId: string): Promise<Transaction[]> {
-    return await db.select()
-      .from(transactions)
-      .where(eq(transactions.inventoryId, inventoryId))
-      .orderBy(desc(transactions.date));
+    return await db.select().from(transactions).where(eq(transactions.inventoryId, inventoryId)).orderBy(desc(transactions.date));
   }
 
   async createTransaction(transaction: any): Promise<Transaction> {
@@ -432,10 +389,7 @@ export class DatabaseStorage implements IStorage {
 
   // ===== TRADER SIGNALS =====
   async getTraderSignals(limit: number = 50): Promise<TraderSignal[]> {
-    return await db.select()
-      .from(traderSignals)
-      .orderBy(desc(traderSignals.createdAt))
-      .limit(limit);
+    return await db.select().from(traderSignals).orderBy(desc(traderSignals.createdAt)).limit(limit);
   }
 
   async createTraderSignal(signal: any): Promise<TraderSignal> {
@@ -444,19 +398,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTraderSignalsByTerminal(terminalId: string, limit: number = 20): Promise<TraderSignal[]> {
-    return await db.select()
-      .from(traderSignals)
-      .where(eq(traderSignals.terminalId, terminalId))
-      .orderBy(desc(traderSignals.createdAt))
-      .limit(limit);
+    return await db.select().from(traderSignals).where(eq(traderSignals.terminalId, terminalId)).orderBy(desc(traderSignals.createdAt)).limit(limit);
   }
 
   // ===== HEDGE RECOMMENDATIONS =====
   async getHedgeRecommendations(userId: string): Promise<HedgeRecommendation[]> {
-    return await db.select()
-      .from(hedgeRecommendations)
-      .where(eq(hedgeRecommendations.userId, userId))
-      .orderBy(desc(hedgeRecommendations.createdAt));
+    return await db.select().from(hedgeRecommendations).where(eq(hedgeRecommendations.userId, userId)).orderBy(desc(hedgeRecommendations.createdAt));
   }
 
   async createHedgeRecommendation(recommendation: any): Promise<HedgeRecommendation> {
