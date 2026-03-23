@@ -15,7 +15,8 @@ export async function getDb() {
   }
 
   try {
-    const client = postgres(databaseUrl as any, {   // ← type assertion
+    // Use type assertion to bypass TypeScript error
+    const client = postgres(databaseUrl as any, {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
@@ -30,7 +31,6 @@ export async function getDb() {
   }
 }
 
-// Initialize db immediately for exports
 if (!connectionPromise) {
   connectionPromise = getDb();
 }
