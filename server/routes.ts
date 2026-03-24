@@ -91,10 +91,10 @@ export async function registerRoutes(
   app.get("/api/terminals", requireAuth, getTerminals);
 
   app.get("/api/forecast/multi/:terminalId", ...withTier, getMultiProductForecasts);
-  app.get("/api/forecast/:terminalId", ...withTier, requireTerminalAccess(), withDataDelay(), getForecast);
+  app.get("/api/forecast/:terminalId", ...withTier, requireTerminalAccess(), withDataDelay(), getForecast as any);
   app.post("/api/forecast", ...withTier, requireForecastQuota(), createForecast);
-  app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast);
-  app.post("/api/forecast/score/:terminalId", ...withTier, requireTier("pro"), requireTerminalAccess(), requireForecastQuota(), scoreForecast);
+  app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast as any);
+  app.post("/api/forecast/score/:terminalId", ...withTier, requireTier("pro"), requireTerminalAccess(), requireForecastQuota(), scoreForecast as any);
   app.get("/api/forecasts/history", ...withTier, getForecastHistory);
 
   app.get("/api/signals/:terminalId", ...withTier, requireTerminalAccess(), getSignals);
