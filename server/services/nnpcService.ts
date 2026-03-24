@@ -64,16 +64,81 @@ async function fetchNNPCPrices(): Promise<NNPCPricesResponse | null> {
     return data;
   } catch (error) {
     console.error("❌ Failed to fetch NNPC prices:", error);
-    return null;   // <-- CRITICAL: return null
+    return null;
   }
 }
 
 async function updateSignalsFromNNPC(nnpcData: NNPCPricesResponse): Promise<void> {
-  // ... (same as before, unchanged)
+  try {
+    const terminals = await storage.getAllTerminals();
+    for (const terminal of terminals) {
+      const currentSignal = await storage.getLatestSignal(terminal.id);
+      let nnpcSupply = "Moderate";
+      const terminalPrices = nnpcData.data.products.filter(p => 
+        p.location.toLowerCase().includes(terminal.name.toLowerCase()) ||
+        terminal.name.toLowerCase().includes(p.location.toLowerCase())
+      );
+      if (terminalPrices.length > 0) {
+        const avgPrice = terminalPrices.reduce((sum, p) => sum + p.price, 0) / terminalPrices.length;
+        if (avgPrice > 650) nnpcSupply = "Weak";
+        else if (avgPrice < 600) nnpcSupply = "Strong";
+      }
+      await storage.createSignal({
+        terminalId: terminal.id,
+        productType: "PMS",
+        vesselActivity: currentSignal?.vesselActivity || "None",
+        truckQueue: currentSignal?.truckQueue || "Low",
+        nnpcSupply,
+        fxPressure: currentSignal?.fxPressure || "Medium",
+        policyRisk: currentSignal?.policyRisk || "Low",
+      });
+      console.log(`✅ Updated signal for terminal ${terminal.name} with NNPC data`);
+    }
+  } catch (error) {
+    console.error("❌ Failed to update signals from NNPC:", error);
+    throw error;
+  }
 }
 
 async function generateForecastsFromNNPC(nnpcData: NNPCPricesResponse): Promise<void> {
-  // ... (same as before, unchanged)
+  try {
+    const terminals = await storage.getAllTerminals();
+    for (const terminal of terminals) {
+      const signal = await storage.getLatestSignal(terminal.id);
+      if (!signal) continue;
+      const priceHistory = await storage.getPriceHistory(terminal.id, 30);
+      const fxRates = await storage.getFxRates(10);
+      const nnpcFeed = {
+        source: "NNPC",
+        products: nnpcData.data.products,
+        fetchedAt: new Date(),
+      };
+      const score = computeForecastScore({
+        signal,
+        priceHistory,
+        nnpcFeed,
+        fxRates,
+        productType: "PMS",
+      });
+      await storage.createForecast({
+        terminalId: terminal.id,
+        productType: "PMS",
+        expectedMin: score.expectedRange.min,
+        expectedMax: score.expectedRange.max,
+        bias: score.bias,
+        confidence: score.confidence,
+        suggestedAction: score.suggestedAction,
+        depotPrice: 0,
+        refineryInfluenceScore: 0,
+        importParityPrice: 0,
+        demandIndex: 0,
+      });
+      console.log(`✅ Generated forecast for terminal ${terminal.name} using NNPC data`);
+    }
+  } catch (error) {
+    console.error("❌ Failed to generate forecasts from NNPC:", error);
+    throw error;
+  }
 }
 
 export async function syncNNPCData(): Promise<NNPCUpdateResult> {
@@ -83,7 +148,6 @@ export async function syncNNPCData(): Promise<NNPCUpdateResult> {
     errors: [],
     timestamp: new Date(),
   };
-
   try {
     console.log("🔄 Starting NNPC data sync...");
     const nnpcData = await fetchNNPCPrices();
@@ -104,12 +168,51 @@ export async function syncNNPCData(): Promise<NNPCUpdateResult> {
   }
 }
 
-export async function getNNPCPrice(productType: string = "PMS") {
-  // ... unchanged
+export async function getNNPCPrice(productType: string = "PMS"): Promise<{
+  price: number;
+  location: string;
+  effectiveDate: Date;
+} | null> {
+  try {
+    const nnpcData = await fetchNNPCPrices();
+    if (nnpcData?.data.products) {
+      const product = nnpcData.data.products.find(p => p.name.toUpperCase() === productType.toUpperCase());
+      if (product) {
+        return {
+          price: product.price,
+          location: product.location,
+          effectiveDate: new Date(product.effectiveDate),
+        };
+      }
+    }
+    const mockData = MOCK_NNPC_PRICES[productType as keyof typeof MOCK_NNPC_PRICES];
+    if (mockData) {
+      return {
+        price: mockData.price,
+        location: mockData.location,
+        effectiveDate: new Date(mockData.effectiveDate),
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error(`❌ Failed to get NNPC price for ${productType}:`, error);
+    return null;
+  }
 }
 
-export async function getNNPCPriceHistory(productType: string = "PMS", days: number = 30) {
-  // ... unchanged
+export async function getNNPCPriceHistory(productType: string = "PMS", days: number = 30): Promise<Array<{ date: Date; price: number; location: string }>> {
+  const history = [];
+  const basePrice = MOCK_NNPC_PRICES[productType as keyof typeof MOCK_NNPC_PRICES]?.price || 620;
+  const location = MOCK_NNPC_PRICES[productType as keyof typeof MOCK_NNPC_PRICES]?.location || "Apapa";
+  const now = new Date();
+  for (let i = days; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    const variation = (Math.random() - 0.5) * 20;
+    const price = Math.round(basePrice + variation);
+    history.push({ date, price, location });
+  }
+  return history;
 }
 
 export async function isNNPCAvailable(): Promise<boolean> {
@@ -122,7 +225,12 @@ export async function isNNPCAvailable(): Promise<boolean> {
   }
 }
 
-export function getNNPCSyncStatus() {
+export function getNNPCSyncStatus(): {
+  lastSync: Date | null;
+  isConfigured: boolean;
+  syncInterval: number;
+  isRunning: boolean;
+} {
   return {
     lastSync: null,
     isConfigured: !!NNPC_API_KEY || process.env.USE_MOCK_NNPC === "true",
