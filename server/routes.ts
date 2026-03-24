@@ -1,11 +1,28 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import type { Server } from "http";
-import { requireAuth, requireAdmin, attachUserRole, requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard.js";
+import {
+  requireAuth,
+  requireAdmin,
+  attachUserRole,
+  requireTier,
+  requireTerminalAccess,
+  requireForecastQuota,
+  withDataDelay,
+} from "./middleware/tierGuard.js";
+
 import { register, login, getMe, refreshToken } from "./controllers/auth.controller.js";
 import { getTerminals } from "./controllers/terminal.controller.js";
-import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast, getForecastHistory } from "./controllers/forecast.controller.js";
+import {
+  getForecast,
+  getMultiProductForecasts,
+  createForecast,
+  generateForecast,
+  scoreForecast,
+  getForecastHistory,
+} from "./controllers/forecast.controller.js";
 import { getSignals, createSignal } from "./controllers/signal.controller.js";
 import { getPriceHistory } from "./controllers/price-history.controller.js";
+
 import {
   adminGetTerminals,
   adminToggleTerminal,
@@ -13,6 +30,7 @@ import {
   adminUpdateSignal,
   adminGetForecasts,
 } from "./controllers/admin.controller.js";
+
 import {
   getNnpcPrice,
   triggerNnpcSync,
@@ -25,6 +43,7 @@ import {
   getMarketOverview,
   getFxHistory,
 } from "./controllers/integrations.controller.js";
+
 import {
   getNotificationPrefs,
   updateNotificationPrefs,
@@ -33,6 +52,7 @@ import {
   triggerMorningDigest,
   triggerTestNotification,
 } from "./controllers/notification.controller.js";
+
 import {
   getSubscriptionInfo,
   getTierInfo,
@@ -40,6 +60,7 @@ import {
   adminGetAllSubscriptions,
   adminUpdateSubscription,
 } from "./controllers/subscription.controller.js";
+
 import {
   getDepots,
   getDepot,
@@ -48,6 +69,7 @@ import {
   createDepotPrice,
   updateDepotPrice,
 } from "./controllers/depot.controller.js";
+
 import {
   getInventory,
   getInventoryWithPnL,
@@ -55,18 +77,29 @@ import {
   createTransaction,
   getTransactions,
 } from "./controllers/inventory.controller.js";
+
 import {
   getTraderSignals,
   submitTraderSignal,
 } from "./controllers/traderSignal.controller.js";
+
 import {
   getHedgeRecommendations,
   generateHedgeRecommendations,
   getAdvancedAnalysis,
 } from "./controllers/hedge.controller.js";
+
 import { getRefineryUpdates, getRefineryStatus } from "./controllers/refinery.controller.js";
 import { getRegulations, getHighImpactRegulations } from "./controllers/regulation.controller.js";
-import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers, seedRefineryAndRegulationData } from "./seed.js";
+
+import {
+  seedDatabase,
+  seedAdminUser,
+  seedDepotsAndPrices,
+  migrateLegacyTiers,
+  seedRefineryAndRegulationData,
+} from "./seed.js";
+
 import { seedPrismaDatabase } from "./prisma-seed.js";
 import { storage } from "./storage.js";
 
@@ -81,7 +114,7 @@ export async function registerRoutes(
   await seedRefineryAndRegulationData();
   await migrateLegacyTiers();
 
-  const withTier = [requireAuth, attachUserRole(storage)];
+  const withTier: RequestHandler[] = [requireAuth, attachUserRole(storage)];
 
   app.post("/api/auth/register", register);
   app.post("/api/auth/login", login);
@@ -91,10 +124,10 @@ export async function registerRoutes(
   app.get("/api/terminals", requireAuth, getTerminals);
 
   app.get("/api/forecast/multi/:terminalId", ...withTier, getMultiProductForecasts);
-  app.get("/api/forecast/:terminalId", ...withTier, requireTerminalAccess(), withDataDelay(), getForecast as any);
+  app.get("/api/forecast/:terminalId", ...withTier, requireTerminalAccess(), withDataDelay(), getForecast);
   app.post("/api/forecast", ...withTier, requireForecastQuota(), createForecast);
-  app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast as any);
-  app.post("/api/forecast/score/:terminalId", ...withTier, requireTier("pro"), requireTerminalAccess(), requireForecastQuota(), scoreForecast as any);
+  app.post("/api/forecast/generate/:terminalId", ...withTier, requireTerminalAccess(), requireForecastQuota(), generateForecast);
+  app.post("/api/forecast/score/:terminalId", ...withTier, requireTier("pro"), requireTerminalAccess(), requireForecastQuota(), scoreForecast);
   app.get("/api/forecasts/history", ...withTier, getForecastHistory);
 
   app.get("/api/signals/:terminalId", ...withTier, requireTerminalAccess(), getSignals);
@@ -102,7 +135,8 @@ export async function registerRoutes(
 
   app.get("/api/terminals/:id/price-history", ...withTier, withDataDelay(), getPriceHistory);
 
-  const adminMiddleware = [...withTier, requireAdmin];
+  const adminMiddleware: RequestHandler[] = [...withTier, requireAdmin];
+
   app.get("/api/admin/terminals", ...adminMiddleware, adminGetTerminals);
   app.patch("/api/admin/terminals/:id", ...adminMiddleware, adminToggleTerminal);
   app.post("/api/admin/forecasts", ...adminMiddleware, adminCreateForecast);
@@ -158,6 +192,7 @@ export async function registerRoutes(
 
   app.get("/api/refinery/updates", ...withTier, requireTier("pro"), getRefineryUpdates);
   app.get("/api/refinery/status", ...withTier, requireTier("pro"), getRefineryStatus);
+
   app.get("/api/regulations", ...withTier, requireTier("pro"), getRegulations);
   app.get("/api/regulations/high-impact", ...withTier, requireTier("pro"), getHighImpactRegulations);
 
