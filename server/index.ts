@@ -3,7 +3,6 @@ import { createServer } from "http";
 import { registerRoutes } from "./routes.js";
 import { testDatabaseConnection } from "./db.js";
 
-// Global error handlers
 process.on('uncaughtException', (err: Error) => {
   console.error('🔥 UNCAUGHT EXCEPTION:', err);
 });
@@ -39,12 +38,10 @@ export async function createApp(): Promise<Express> {
     console.error('❌ Failed to initialize app:', error);
   }
 
-  // 404 handler
   app.use((req: Request, res: Response) => {
     res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.path}` });
   });
 
-  // Global error handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     console.error('❌ Express Error:', err);
     res.status(err.status || 500).json({
@@ -65,7 +62,6 @@ export default async function handler(req: Request, res: Response) {
   return cachedApp(req, res);
 }
 
-// For local development
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
   createApp().then(app => {
