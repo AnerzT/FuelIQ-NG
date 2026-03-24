@@ -64,7 +64,7 @@ async function fetchNNPCPrices(): Promise<NNPCPricesResponse | null> {
     return data;
   } catch (error) {
     console.error("❌ Failed to fetch NNPC prices:", error);
-    return null;
+    return null;   // <-- CRITICAL
   }
 }
 
