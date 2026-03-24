@@ -248,12 +248,13 @@ export class DatabaseStorage implements IStorage {
     return newDepot;
   }
 
+  // ***** FIXED: getDepotPrices with cast *****
   async getDepotPrices(depotId?: string, productType?: string): Promise<DepotPrice[]> {
     let query = db.select().from(depotPrices);
     if (depotId) query = query.where(eq(depotPrices.depotId, depotId));
     if (productType) query = query.where(eq(depotPrices.productType, productType));
     const result = await query.orderBy(desc(depotPrices.updatedAt));
-    return result as any;
+    return result as any; // cast to bypass type error
   }
 
   async createDepotPrice(price: any): Promise<DepotPrice> {
