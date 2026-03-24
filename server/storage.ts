@@ -53,6 +53,10 @@ type Forecast = {
   confidence: number;
   suggestedAction: string;
   createdAt: Date;
+  depotPrice?: number;
+  refineryInfluenceScore?: number;
+  importParityPrice?: number;
+  demandIndex?: number;
 };
 
 type Signal = {
@@ -131,32 +135,34 @@ class Storage {
   transactions: Transaction[] = [];
   fxRates: FxRate[] = [];
   notifications: NotificationLog[] = [];
-traderSignals: traderSignal[] = [];
-   
+  traderSignals: TraderSignal[] = []; // Fix TS2552: was traderSignal (lowercase), must be TraderSignal
+
+  /* ================= TRADER SIGNALS ================= */
+
+  async createTraderSignal(data: Partial<TraderSignal>) {
+    const signal: TraderSignal = {
+      id: randomUUID(),
+      createdAt: new Date(),
+      ...data,
+    } as TraderSignal;
+
+    this.traderSignals.unshift(signal);
+    return signal;
+  }
+
+  async getTraderSignals(limit: number) {
+    return this.traderSignals.slice(0, limit);
+  }
+
+  async getTraderSignalsByTerminal(terminalId: string, limit: number) {
+    return this.traderSignals
+      .filter(s => s.terminalId === terminalId)
+      .slice(0, limit);
+  }
+
   /* ================= USERS ================= */
 
- async createTraderSignal(data: Partial<TraderSignal>) {
-  const signal: TraderSignal = {
-    id: randomUUID(),
-    createdAt: new Date(),
-    ...data,
-  } as TraderSignal;
-
-  this.traderSignals.unshift(signal);
-  return signal;
-}
-
-async getTraderSignals(limit: number) {
-  return this.traderSignals.slice(0, limit);
-}
-
-async getTraderSignalsByTerminal(terminalId: string, limit: number) {
-  return this.traderSignals
-    .filter(s => s.terminalId === terminalId)
-    .slice(0, limit);
-}
-   
-   async createUser(data: Partial<User>) {
+  async createUser(data: Partial<User>) {
     const user: User = { id: randomUUID(), role: "marketer", ...data } as User;
     this.users.push(user);
     return user;
@@ -183,6 +189,13 @@ async getTraderSignalsByTerminal(terminalId: string, limit: number) {
 
   async getSubscribedUsers() {
     return this.users.filter(u => u.subscriptionTier !== "free");
+  }
+
+  async incrementForecastCount(userId: string) {
+    const user = await this.getUser(userId);
+    if (!user) return null;
+    user.forecastsUsedToday = (user.forecastsUsedToday ?? 0) + 1;
+    return user;
   }
 
   /* ================= TERMINALS ================= */
