@@ -1,220 +1,371 @@
-import { db } from "./db.js";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
-import {
-  users,
-  terminals,
-  forecasts,
-  marketSignals,
-  priceHistory,
-  depots,
-  depotPrices,
-  refineryUpdates,
-  regulationUpdates,
-  fxRates,
-  inventory,
-  transactions,
-  traderSignals,
-  hedgeRecommendations,
-  type User,
-  type InsertUser,
-  type Terminal,
-  type Forecast,
-  type MarketSignal,
-  type PriceHistoryEntry,
-  type Depot,
-  type DepotPrice,
-  type RefineryUpdate,
-  type RegulationUpdate,
-  type FxRate,
-  type Inventory,
-  type Transaction,
-  type TraderSignal,
-  type HedgeRecommendation,
-} from "../shared/schema.js";
+/* =========================
+   TYPES
+========================= */
 
-export class DatabaseStorage {
-  // ---------------- USERS ----------------
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  whatsappPhone?: string;
+  role: string;
+  subscriptionTier?: string;
+  subscriptionStartDate?: Date;
+  subscriptionEndDate?: Date;
+  assignedTerminalId?: string;
+  notificationPrefs?: any;
+  forecastsUsedToday?: number;
+  smsAlertsUsedThisWeek?: number;
+};
+
+type Terminal = {
+  id: string;
+  name: string;
+  active: boolean;
+};
+
+type Depot = {
+  id: string;
+  name: string;
+  terminalId: string;
+  owner: string;
+  active: boolean;
+};
+
+type DepotPrice = {
+  id: string;
+  depotId: string;
+  productType: string;
+  price: number;
+  updatedAt: Date;
+};
+
+type Forecast = {
+  id: string;
+  terminalId: string;
+  productType: string;
+  expectedMin: number;
+  expectedMax: number;
+  bias: string;
+  confidence: number;
+  suggestedAction: string;
+  createdAt: Date;
+};
+
+type Signal = {
+  id: string;
+  terminalId: string;
+  productType: string;
+  vesselActivity?: string;
+  truckQueue?: string;
+  nnpcSupply?: string;
+  fxPressure?: string;
+  policyRisk?: string;
+  createdAt: Date;
+};
+
+type Inventory = {
+  id: string;
+  userId: string;
+  terminalId: string;
+  productType: string;
+  volumeLitres: number;
+  averageCost: number;
+};
+
+type Transaction = {
+  id: string;
+  inventoryId: string;
+  type: "buy" | "sell";
+  volume: number;
+  price: number;
+};
+
+type FxRate = {
+  id: string;
+  rate: number;
+  source: string;
+  createdAt: Date;
+};
+
+type NotificationLog = {
+  id: string;
+  userId: string;
+  channel: string;
+  message: string;
+  type: string;
+  createdAt: Date;
+};
+
+/* =========================
+   STORAGE CLASS
+========================= */
+
+class Storage {
+  users: User[] = [];
+  terminals: Terminal[] = [];
+  depots: Depot[] = [];
+  depotPrices: DepotPrice[] = [];
+  forecasts: Forecast[] = [];
+  signals: Signal[] = [];
+  inventory: Inventory[] = [];
+  transactions: Transaction[] = [];
+  fxRates: FxRate[] = [];
+  notifications: NotificationLog[] = [];
+
+  /* ================= USERS ================= */
+
+  async createUser(data: Partial<User>) {
+    const user: User = { id: randomUUID(), role: "marketer", ...data } as User;
+    this.users.push(user);
     return user;
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+  async getUser(id: string) {
+    return this.users.find(u => u.id === id);
+  }
+
+  async getUserByEmail(email: string) {
+    return this.users.find(u => u.email === email);
+  }
+
+  async getAllUsers() {
+    return this.users;
+  }
+
+  async updateUser(id: string, data: Partial<User>) {
+    const user = await this.getUser(id);
+    if (!user) return null;
+    Object.assign(user, data);
     return user;
   }
 
-  async createUser(user: InsertUser): Promise<User> {
-    const [newUser] = await db.insert(users).values(user as any).returning();
-    return newUser;
+  async getSubscribedUsers() {
+    return this.users.filter(u => u.subscriptionTier !== "free");
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
-    const [updated] = await db.update(users).set(data as any).where(eq(users.id, id)).returning();
-    return updated;
+  /* ================= TERMINALS ================= */
+
+  async getAllTerminals() {
+    return this.terminals;
   }
 
-  async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users);
+  async getTerminal(id: string) {
+    return this.terminals.find(t => t.id === id);
   }
 
-  // ---------------- TERMINALS ----------------
-  async getAllTerminals(): Promise<Terminal[]> {
-    return await db.select().from(terminals);
+  async updateTerminal(id: string, data: Partial<Terminal>) {
+    const t = await this.getTerminal(id);
+    if (!t) return null;
+    Object.assign(t, data);
+    return t;
   }
 
-  async getTerminal(id: string): Promise<Terminal | undefined> {
-    const [terminal] = await db.select().from(terminals).where(eq(terminals.id, id));
-    return terminal;
+  /* ================= DEPOTS ================= */
+
+  async getDepots(terminalId?: string) {
+    return terminalId
+      ? this.depots.filter(d => d.terminalId === terminalId)
+      : this.depots;
   }
 
-  // ---------------- FORECASTS ----------------
-  async createForecast(data: any): Promise<Forecast> {
-    const [forecast] = await db.insert(forecasts).values(data).returning();
-    return forecast;
+  async getDepot(id: string) {
+    return this.depots.find(d => d.id === id);
   }
 
-  async getLatestForecast(terminalId: string): Promise<Forecast | undefined> {
-    const [forecast] = await db
-      .select()
-      .from(forecasts)
-      .where(eq(forecasts.terminalId, terminalId))
-      .orderBy(desc(forecasts.createdAt))
-      .limit(1);
-
-    return forecast;
-  }
-
-  // ---------------- SIGNALS ----------------
-  async createSignal(data: any): Promise<MarketSignal> {
-    const [signal] = await db.insert(marketSignals).values(data).returning();
-    return signal;
-  }
-
-  async getLatestSignal(terminalId: string): Promise<MarketSignal | undefined> {
-    const [signal] = await db
-      .select()
-      .from(marketSignals)
-      .where(eq(marketSignals.terminalId, terminalId))
-      .orderBy(desc(marketSignals.createdAt))
-      .limit(1);
-
-    return signal;
-  }
-
-  // ---------------- PRICE HISTORY ----------------
-  async getPriceHistory(terminalId: string, days = 30): Promise<PriceHistoryEntry[]> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-
-    return await db
-      .select()
-      .from(priceHistory)
-      .where(and(eq(priceHistory.terminalId, terminalId), gte(priceHistory.date, cutoff)))
-      .orderBy(priceHistory.date);
-  }
-
-  // ---------------- DEPOTS ----------------
-  async getDepots(): Promise<Depot[]> {
-    return await db.select().from(depots);
-  }
-
-  async getDepot(id: string): Promise<Depot | undefined> {
-    const [depot] = await db.select().from(depots).where(eq(depots.id, id));
+  async createDepot(data: Partial<Depot>) {
+    const depot: Depot = { id: randomUUID(), ...data } as Depot;
+    this.depots.push(depot);
     return depot;
   }
 
-  async createDepot(data: any): Promise<Depot> {
-    const [depot] = await db.insert(depots).values(data).returning();
-    return depot;
+  /* ================= DEPOT PRICES ================= */
+
+  async getDepotPrices(depotId?: string, productType?: string) {
+    return this.depotPrices.filter(p =>
+      (!depotId || p.depotId === depotId) &&
+      (!productType || p.productType === productType)
+    );
   }
 
-  // ✅ FIXED (main TS2740 issue)
-  async getDepotPrices(depotId?: string, productType?: string): Promise<DepotPrice[]> {
-    const conditions = [];
-
-    if (depotId) conditions.push(eq(depotPrices.depotId, depotId));
-    if (productType) conditions.push(eq(depotPrices.productType, productType));
-
-    return await db
-      .select()
-      .from(depotPrices)
-      .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(desc(depotPrices.updatedAt));
-  }
-
-  async createDepotPrice(data: any): Promise<DepotPrice> {
-    const [price] = await db.insert(depotPrices).values(data).returning();
+  async createDepotPrice(data: Partial<DepotPrice>) {
+    const price: DepotPrice = {
+      id: randomUUID(),
+      updatedAt: new Date(),
+      ...data,
+    } as DepotPrice;
+    this.depotPrices.unshift(price);
     return price;
   }
 
-  async updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined> {
-    const [updated] = await db
-      .update(depotPrices)
-      .set({ price, updatedAt: new Date() } as any)
-      .where(eq(depotPrices.id, id))
-      .returning();
-
-    return updated;
+  async updateDepotPrice(id: string, price: number) {
+    const p = this.depotPrices.find(p => p.id === id);
+    if (!p) return null;
+    p.price = price;
+    p.updatedAt = new Date();
+    return p;
   }
 
-  // ---------------- FX ----------------
-  async getFxRates(limit = 10): Promise<FxRate[]> {
-    return await db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(limit);
+  /* ================= FORECAST ================= */
+
+  async createForecast(data: Partial<Forecast>) {
+    const forecast: Forecast = {
+      id: randomUUID(),
+      createdAt: new Date(),
+      ...data,
+    } as Forecast;
+    this.forecasts.unshift(forecast);
+    return forecast;
   }
 
-  async createFxRate(data: any): Promise<FxRate> {
-    const [rate] = await db.insert(fxRates).values(data).returning();
-    return rate;
+  async getLatestForecast(terminalId: string, productType: string) {
+    return this.forecasts.find(
+      f => f.terminalId === terminalId && f.productType === productType
+    );
   }
 
-  // ---------------- INVENTORY ----------------
-  async getInventory(userId: string): Promise<Inventory[]> {
-    return await db.select().from(inventory).where(eq(inventory.userId, userId));
+  async getForecasts(terminalId: string, limit: number) {
+    return this.forecasts
+      .filter(f => f.terminalId === terminalId)
+      .slice(0, limit);
   }
 
-  async createInventory(data: any): Promise<Inventory> {
-    const [inv] = await db.insert(inventory).values(data).returning();
-    return inv;
+  async getAllForecasts(limit: number) {
+    return this.forecasts.slice(0, limit);
   }
 
-  async createTransaction(data: any): Promise<Transaction> {
-    const [tx] = await db.insert(transactions).values(data).returning();
-    return tx;
-  }
+  /* ================= SIGNAL ================= */
 
-  async getTransactions(inventoryId: string): Promise<Transaction[]> {
-    return await db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.inventoryId, inventoryId))
-      .orderBy(desc(transactions.date));
-  }
-
-  // ---------------- TRADER SIGNALS ----------------
-  async getTraderSignals(limit = 50): Promise<TraderSignal[]> {
-    return await db.select().from(traderSignals).orderBy(desc(traderSignals.createdAt)).limit(limit);
-  }
-
-  async createTraderSignal(data: any): Promise<TraderSignal> {
-    const [signal] = await db.insert(traderSignals).values(data).returning();
+  async createSignal(data: Partial<Signal>) {
+    const signal: Signal = {
+      id: randomUUID(),
+      createdAt: new Date(),
+      ...data,
+    } as Signal;
+    this.signals.unshift(signal);
     return signal;
   }
 
-  // ---------------- HEDGE ----------------
-  async getHedgeRecommendations(userId: string): Promise<HedgeRecommendation[]> {
-    return await db
-      .select()
-      .from(hedgeRecommendations)
-      .where(eq(hedgeRecommendations.userId, userId))
-      .orderBy(desc(hedgeRecommendations.createdAt));
+  async getLatestSignal(terminalId: string, productType?: string) {
+    return this.signals.find(
+      s =>
+        s.terminalId === terminalId &&
+        (!productType || s.productType === productType)
+    );
   }
 
-  async createHedgeRecommendation(data: any): Promise<HedgeRecommendation> {
-    const [rec] = await db.insert(hedgeRecommendations).values(data).returning();
-    return rec;
+  async getSignalHistory(terminalId: string, limit: number) {
+    return this.signals
+      .filter(s => s.terminalId === terminalId)
+      .slice(0, limit);
+  }
+
+  /* ================= INVENTORY ================= */
+
+  async getInventory(userId: string) {
+    return this.inventory.filter(i => i.userId === userId);
+  }
+
+  async getInventoryItem(id: string) {
+    return this.inventory.find(i => i.id === id);
+  }
+
+  async createInventory(data: Partial<Inventory>) {
+    const item: Inventory = { id: randomUUID(), ...data } as Inventory;
+    this.inventory.push(item);
+    return item;
+  }
+
+  async updateInventory(id: string, data: Partial<Inventory>) {
+    const item = await this.getInventoryItem(id);
+    if (!item) return null;
+    Object.assign(item, data);
+    return item;
+  }
+
+  async createTransaction(data: Partial<Transaction>) {
+    const tx: Transaction = { id: randomUUID(), ...data } as Transaction;
+    this.transactions.push(tx);
+    return tx;
+  }
+
+  async getTransactions(inventoryId: string) {
+    return this.transactions.filter(t => t.inventoryId === inventoryId);
+  }
+
+  /* ================= FX ================= */
+
+  async createFxRate(data: Partial<FxRate>) {
+    const rate: FxRate = {
+      id: randomUUID(),
+      createdAt: new Date(),
+      ...data,
+    } as FxRate;
+    this.fxRates.unshift(rate);
+    return rate;
+  }
+
+  async getFxRates(limit: number) {
+    return this.fxRates.slice(0, limit);
+  }
+
+  async getLatestFxRate() {
+    return this.fxRates[0];
+  }
+
+  /* ================= NOTIFICATIONS ================= */
+
+  async createNotificationLog(userId: string, channel: string, message: string, type: string) {
+    const log: NotificationLog = {
+      id: randomUUID(),
+      userId,
+      channel,
+      message,
+      type,
+      createdAt: new Date(),
+    };
+    this.notifications.unshift(log);
+    return log;
+  }
+
+  async getNotificationLogs(userId: string, limit: number) {
+    return this.notifications
+      .filter(n => n.userId === userId)
+      .slice(0, limit);
+  }
+
+  /* ================= PLACEHOLDERS ================= */
+
+  async getRefineryUpdates(limit: number) {
+    return [];
+  }
+
+  async getRegulationUpdates(limit: number) {
+    return [];
+  }
+
+  async getHighImpactRegulations() {
+    return [];
+  }
+
+  async getHedgeRecommendations(userId: string) {
+    return [];
+  }
+
+  async createHedgeRecommendation(data: any) {
+    return data;
+  }
+
+  async getPriceHistory(terminalId: string, days: number, productType: string) {
+    return [];
   }
 }
 
-export const storage = new DatabaseStorage();
+/* =========================
+   EXPORT INSTANCE
+========================= */
+
+export const storage = new Storage();
