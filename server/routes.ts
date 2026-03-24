@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth.js";
+import { requireAuth, requireAdmin, attachUserRole, requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard.js";
 import { register, login, getMe, refreshToken } from "./controllers/auth.controller.js";
 import { getTerminals } from "./controllers/terminal.controller.js";
 import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast, getForecastHistory } from "./controllers/forecast.controller.js";
@@ -66,7 +66,6 @@ import {
 } from "./controllers/hedge.controller.js";
 import { getRefineryUpdates, getRefineryStatus } from "./controllers/refinery.controller.js";
 import { getRegulations, getHighImpactRegulations } from "./controllers/regulation.controller.js";
-import { requireTier, requireTerminalAccess, requireForecastQuota, withDataDelay } from "./middleware/tierGuard.js";
 import { seedDatabase, seedAdminUser, seedDepotsAndPrices, migrateLegacyTiers, seedRefineryAndRegulationData } from "./seed.js";
 import { seedPrismaDatabase } from "./prisma-seed.js";
 import { storage } from "./storage.js";
