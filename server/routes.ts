@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { type Server } from "http";
+import type { Server } from "http";
 import { requireAuth, requireAdmin, attachUserRole } from "./middleware/auth.js";
 import { register, login, getMe, refreshToken } from "./controllers/auth.controller.js";
 import { getTerminals } from "./controllers/terminal.controller.js";
