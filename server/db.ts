@@ -7,7 +7,7 @@ let connectionPromise: Promise<ReturnType<typeof drizzle>> | null = null;
 
 export async function getDb() {
   if (dbInstance) return dbInstance;
-  
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error('❌ DATABASE_URL environment variable is not set');
@@ -20,7 +20,7 @@ export async function getDb() {
       idle_timeout: 20,
       connect_timeout: 10,
     });
-    
+
     dbInstance = drizzle(client, { schema });
     console.log('✅ Database connected');
     return dbInstance;
