@@ -100,6 +100,22 @@ type NotificationLog = {
   createdAt: Date;
 };
 
+/* ================= TRADER SIGNALS ================= */
+
+type TraderSignal = {
+  id: string;
+  userId: string;
+  message: string;
+  sentimentScore: number;
+  impactScore: number;
+  terminalId: string;
+  productType: string;
+  detectedTerminal?: string;
+  detectedProduct?: string;
+  keywords?: string[];
+  createdAt: Date;
+};
+
 /* =========================
    STORAGE CLASS
 ========================= */
@@ -115,10 +131,32 @@ class Storage {
   transactions: Transaction[] = [];
   fxRates: FxRate[] = [];
   notifications: NotificationLog[] = [];
-
+traderSignals: traderSignal[] = [];
+   
   /* ================= USERS ================= */
 
-  async createUser(data: Partial<User>) {
+ async createTraderSignal(data: Partial<TraderSignal>) {
+  const signal: TraderSignal = {
+    id: randomUUID(),
+    createdAt: new Date(),
+    ...data,
+  } as TraderSignal;
+
+  this.traderSignals.unshift(signal);
+  return signal;
+}
+
+async getTraderSignals(limit: number) {
+  return this.traderSignals.slice(0, limit);
+}
+
+async getTraderSignalsByTerminal(terminalId: string, limit: number) {
+  return this.traderSignals
+    .filter(s => s.terminalId === terminalId)
+    .slice(0, limit);
+}
+   
+   async createUser(data: Partial<User>) {
     const user: User = { id: randomUUID(), role: "marketer", ...data } as User;
     this.users.push(user);
     return user;
