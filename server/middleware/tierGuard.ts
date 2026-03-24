@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { storage } from "../storage.js";
 import { TIER_LIMITS, type SubscriptionTier } from "../../shared/schema.js";
 import jwt from "jsonwebtoken";
@@ -88,7 +88,6 @@ export function requireTerminalAccess() {
         res.status(401).json({ success: false, message: "Unauthorized" });
         return;
       }
-      // Allow if user is admin or has no assigned terminal, or matches assigned terminal
       if (user.role === "admin" || !user.assignedTerminalId || user.assignedTerminalId === terminalId) {
         next();
       } else {
@@ -122,8 +121,8 @@ export function requireForecastQuota() {
   };
 }
 
-export function withDataDelay() {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export function withDataDelay(): RequestHandler {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).user;
       const tier = user?.subscriptionTier as SubscriptionTier || "free";
