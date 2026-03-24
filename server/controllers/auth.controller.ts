@@ -1,49 +1,26 @@
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { storage } from "../storage.js";
-import { loginSchema, registerSchema } from "../../shared/schema.js";
-import { generateToken, type AuthRequest } from "../middleware/auth.js";
+import { registerSchema, loginSchema } from "../../shared/schema.js";
+import type { AuthRequest } from "../middleware/auth.js";
+import { ensureString } from "../utils/params.js";
 
-const loginAttempts = new Map<string, { count: number; lastAttempt: number; lockedUntil: number }>();
-const LOCKOUT_THRESHOLD = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000;
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "your-refresh-secret";
 
-function checkLockout(key: string): { locked: boolean; remainingMs: number } {
-  const entry = loginAttempts.get(key);
-  if (!entry) return { locked: false, remainingMs: 0 };
-  if (entry.lockedUntil > Date.now()) {
-    return { locked: true, remainingMs: entry.lockedUntil - Date.now() };
-  }
-  if (Date.now() - entry.lastAttempt > LOCKOUT_DURATION) {
-    loginAttempts.delete(key);
-    return { locked: false, remainingMs: 0 };
-  }
-  return { locked: false, remainingMs: 0 };
-}
-
-function recordFailedAttempt(key: string): void {
-  const entry = loginAttempts.get(key) || { count: 0, lastAttempt: 0, lockedUntil: 0 };
-  entry.count += 1;
-  entry.lastAttempt = Date.now();
-  if (entry.count >= LOCKOUT_THRESHOLD) {
-    entry.lockedUntil = Date.now() + LOCKOUT_DURATION;
-  }
-  loginAttempts.set(key, entry);
-}
-
-function clearAttempts(key: string): void {
-  loginAttempts.delete(key);
-}
-
-function safeUserData(user: any) {
-  return {
-    id: user.id,
-    name: user.name ?? user.username,
-    email: user.email,
-    role: user.role,
-    subscriptionTier: user.subscriptionTier,
-    createdAt: user.createdAt,
-  };
+function generateTokens(user: any) {
+  const accessToken = jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+  const refreshToken = jwt.sign(
+    { id: user.id },
+    JWT_REFRESH_SECRET,
+    { expiresIn: "30d" }
+  );
+  return { accessToken, refreshToken };
 }
 
 export async function register(req: Request, res: Response) {
@@ -56,124 +33,128 @@ export async function register(req: Request, res: Response) {
       });
     }
 
-    const { name, email, password, username } = parsed.data as any;
-    const resolvedEmail = email?.toLowerCase().trim();
-    const resolvedUsername = username ?? resolvedEmail ?? name;
+    const { name, email, password, phone, whatsappPhone } = parsed.data;
 
-    if (!password || password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be at least 6 characters",
-      });
+    const existing = await storage.getUserByEmail(email);
+    if (existing) {
+      return res.status(400).json({ success: false, message: "Email already registered" });
     }
 
-    if (resolvedEmail) {
-      const existing = await storage.getUserByEmail(resolvedEmail);
-      if (existing) {
-        return res.status(409).json({
-          success: false,
-          message: "Email already registered",
-        });
-      }
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await storage.createUser({
-      username: resolvedUsername,
-      email: resolvedEmail,
+      name,
+      email,
       password: hashedPassword,
+      phone,
+      whatsappPhone,
       role: "marketer",
-    } as any);
+    });
 
-    const token = generateToken(String(user.id));
+    const { accessToken, refreshToken } = generateTokens(user);
 
     return res.status(201).json({
       success: true,
-      message: "Account created successfully",
-      data: { user: safeUserData(user), token },
+      message: "User registered successfully",
+      data: {
+        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        accessToken,
+        refreshToken,
+      },
     });
   } catch (err: any) {
+    console.error("Registration error:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 }
 
 export async function login(req: Request, res: Response) {
   try {
-    const { email, username, password } = req.body;
-    const resolvedEmail = (email || username || "").toLowerCase().trim();
-
-    const lockoutKey = resolvedEmail;
-    const lockout = checkLockout(lockoutKey);
-    if (lockout.locked) {
-      const minutes = Math.ceil(lockout.remainingMs / 60000);
-      return res.status(429).json({
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
         success: false,
-        message: `Account temporarily locked. Try again in ${minutes} minute${minutes !== 1 ? "s" : ""}.`,
+        message: parsed.error.issues[0]?.message || "Invalid input",
       });
     }
 
-    const user = await storage.getUserByEmail(resolvedEmail);
+    const { email, password } = parsed.data;
+    const user = await storage.getUserByEmail(email);
     if (!user) {
-      recordFailedAttempt(lockoutKey);
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
-      recordFailedAttempt(lockoutKey);
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
-    clearAttempts(lockoutKey);
-    const token = generateToken(String(user.id));
+    const { accessToken, refreshToken } = generateTokens(user);
 
     return res.json({
       success: true,
-      message: "Login successful",
-      data: { user: safeUserData(user), token },
+      data: {
+        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        accessToken,
+        refreshToken,
+      },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}
-
-export async function refreshToken(req: AuthRequest, res: Response) {
-  try {
-    const user = await storage.getUser(req.userId!);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    const token = generateToken(String(user.id));
-
-    return res.json({
-      success: true,
-      message: "Token refreshed successfully",
-      data: { user: safeUserData(user), token },
-    });
-  } catch (err: any) {
+    console.error("Login error:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 }
 
 export async function getMe(req: AuthRequest, res: Response) {
   try {
-    const user = await storage.getUser(req.userId!);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
+    const userId = ensureString(req.userId);
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     return res.json({
       success: true,
-      data: { user: safeUserData(user) },
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        whatsappPhone: user.whatsappPhone,
+        subscriptionTier: user.subscriptionTier,
+        assignedTerminalId: user.assignedTerminalId,
+      },
     });
   } catch (err: any) {
+    console.error("GetMe error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function refreshToken(req: AuthRequest, res: Response) {
+  try {
+    const refreshToken = ensureString(req.body.refreshToken);
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, message: "Refresh token required" });
+    }
+
+    let payload: any;
+    try {
+      payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, message: "Invalid refresh token" });
+    }
+
+    const user = await storage.getUser(payload.id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+    return res.json({
+      success: true,
+      data: { accessToken, refreshToken: newRefreshToken },
+    });
+  } catch (err: any) {
+    console.error("Refresh error:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 }
