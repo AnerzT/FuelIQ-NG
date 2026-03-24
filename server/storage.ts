@@ -1,5 +1,6 @@
 import { db } from "./db.js";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
+
 import {
   users,
   terminals,
@@ -32,72 +33,8 @@ import {
   type HedgeRecommendation,
 } from "../shared/schema.js";
 
-export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
-  incrementForecastCount(userId: string): Promise<void>;
-  resetForecastCount(userId: string): Promise<void>;
-  resetSmsCount(userId: string): Promise<void>;
-  updateUserNotificationPrefs(userId: string, prefs: any): Promise<User | undefined>;
-  updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined>;
-  getAllUsers(): Promise<User[]>;
-  getSubscribedUsers(): Promise<User[]>;
-  createNotificationLog(userId: string, channel: string, message: string, alertType?: string): Promise<any>;
-  getNotificationLogs(userId: string, limit?: number): Promise<any[]>;
-
-  getTerminal(id: string): Promise<Terminal | undefined>;
-  getTerminalByCode(code: string): Promise<Terminal | undefined>;
-  getAllTerminals(): Promise<Terminal[]>;
-  getTerminals(): Promise<Terminal[]>;
-  updateTerminal(id: string, data: Partial<Terminal>): Promise<Terminal | undefined>;
-
-  getLatestForecast(terminalId: string, productType?: string): Promise<Forecast | undefined>;
-  getForecasts(terminalId: string, limit?: number): Promise<Forecast[]>;
-  getAllForecasts(limit?: number): Promise<Forecast[]>;
-  createForecast(forecast: any): Promise<Forecast>;
-
-  getLatestSignal(terminalId: string, productType?: string): Promise<MarketSignal | undefined>;
-  createSignal(signal: any): Promise<MarketSignal>;
-  getSignalHistory(terminalId: string, limit?: number): Promise<MarketSignal[]>;
-
-  getPriceHistory(terminalId: string, days?: number, productType?: string): Promise<PriceHistoryEntry[]>;
-
-  getDepots(terminalId?: string): Promise<Depot[]>;
-  getDepot(id: string): Promise<Depot | undefined>;
-  createDepot(depot: any): Promise<Depot>;
-
-  getDepotPrices(depotId?: string, productType?: string): Promise<DepotPrice[]>;
-  createDepotPrice(price: any): Promise<DepotPrice>;
-  updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined>;
-
-  getRefineryUpdates(limit?: number): Promise<RefineryUpdate[]>;
-
-  getRegulationUpdates(limit?: number): Promise<RegulationUpdate[]>;
-  getHighImpactRegulations(): Promise<RegulationUpdate[]>;
-
-  getFxRates(limit?: number): Promise<FxRate[]>;
-  getLatestFxRate(): Promise<FxRate | undefined>;
-  createFxRate(rate: any): Promise<FxRate>;
-
-  getInventory(userId: string): Promise<Inventory[]>;
-  getInventoryItem(id: string): Promise<Inventory | undefined>;
-  createInventory(inventory: any): Promise<Inventory>;
-  updateInventory(id: string, data: Partial<Inventory>): Promise<Inventory | undefined>;
-
-  getTransactions(inventoryId: string): Promise<Transaction[]>;
-  createTransaction(transaction: any): Promise<Transaction>;
-
-  getTraderSignals(limit?: number): Promise<TraderSignal[]>;
-  createTraderSignal(signal: any): Promise<TraderSignal>;
-  getTraderSignalsByTerminal(terminalId: string, limit?: number): Promise<TraderSignal[]>;
-
-  getHedgeRecommendations(userId: string): Promise<HedgeRecommendation[]>;
-  createHedgeRecommendation(recommendation: any): Promise<HedgeRecommendation>;
-}
-
-export class DatabaseStorage implements IStorage {
+export class DatabaseStorage {
+  // ---------------- USERS ----------------
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -118,47 +55,13 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async incrementForecastCount(userId: string): Promise<void> {
-    await db.update(users).set({ forecastsUsedToday: sql`${users.forecastsUsedToday} + 1` } as any).where(eq(users.id, userId));
-  }
-
-  async resetForecastCount(userId: string): Promise<void> {
-    await db.update(users).set({ forecastsUsedToday: 0, forecastDayResetDate: new Date() } as any).where(eq(users.id, userId));
-  }
-
-  async resetSmsCount(userId: string): Promise<void> {
-    await db.update(users).set({ smsAlertsUsedThisWeek: 0, smsWeekResetDate: new Date() } as any).where(eq(users.id, userId));
-  }
-
-  async updateUserNotificationPrefs(userId: string, prefs: any): Promise<User | undefined> {
-    const [updated] = await db.update(users).set({ notificationPrefs: prefs } as any).where(eq(users.id, userId)).returning();
-    return updated;
-  }
-
-  async updateUserSubscription(userId: string, data: Partial<User>): Promise<User | undefined> {
-    const [updated] = await db.update(users).set(data as any).where(eq(users.id, userId)).returning();
-    return updated;
-  }
-
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
   }
 
-  async getSubscribedUsers(): Promise<User[]> {
-    const allUsers = await this.getAllUsers();
-    return allUsers.filter(user => {
-      const prefs = user.notificationPrefs as any;
-      return prefs?.smsEnabled === true || prefs?.whatsappEnabled === true;
-    });
-  }
-
-  async createNotificationLog(userId: string, channel: string, message: string, alertType: string = "general"): Promise<any> {
-    console.log(`📝 Notification log: ${userId} - ${channel} - ${alertType}`);
-    return { id: "mock-" + Date.now(), userId, channel, message, alertType, createdAt: new Date() };
-  }
-
-  async getNotificationLogs(userId: string, limit: number = 50): Promise<any[]> {
-    return [];
+  // ---------------- TERMINALS ----------------
+  async getAllTerminals(): Promise<Terminal[]> {
+    return await db.select().from(terminals);
   }
 
   async getTerminal(id: string): Promise<Terminal | undefined> {
@@ -166,75 +69,54 @@ export class DatabaseStorage implements IStorage {
     return terminal;
   }
 
-  async getTerminalByCode(code: string): Promise<Terminal | undefined> {
-    const [terminal] = await db.select().from(terminals).where(eq(terminals.code, code));
-    return terminal;
-  }
-
-  async getAllTerminals(): Promise<Terminal[]> {
-    return await db.select().from(terminals);
-  }
-
-  async getTerminals(): Promise<Terminal[]> {
-    return this.getAllTerminals();
-  }
-
-  async updateTerminal(id: string, data: Partial<Terminal>): Promise<Terminal | undefined> {
-    const [updated] = await db.update(terminals).set(data).where(eq(terminals.id, id)).returning();
-    return updated;
-  }
-
-  async getLatestForecast(terminalId: string, productType: string = "PMS"): Promise<Forecast | undefined> {
-    const [forecast] = await db.select()
-      .from(forecasts)
-      .where(and(eq(forecasts.terminalId, terminalId), eq(forecasts.productType, productType)))
-      .orderBy(desc(forecasts.createdAt))
-      .limit(1);
+  // ---------------- FORECASTS ----------------
+  async createForecast(data: any): Promise<Forecast> {
+    const [forecast] = await db.insert(forecasts).values(data).returning();
     return forecast;
   }
 
-  async getForecasts(terminalId: string, limit: number = 50): Promise<Forecast[]> {
-    return await db.select().from(forecasts).where(eq(forecasts.terminalId, terminalId)).orderBy(desc(forecasts.createdAt)).limit(limit);
-  }
-
-  async getAllForecasts(limit: number = 100): Promise<Forecast[]> {
-    return await db.select().from(forecasts).orderBy(desc(forecasts.createdAt)).limit(limit);
-  }
-
-  async createForecast(forecast: any): Promise<Forecast> {
-    const [newForecast] = await db.insert(forecasts).values(forecast).returning();
-    return newForecast;
-  }
-
-  async getLatestSignal(terminalId: string, productType: string = "PMS"): Promise<MarketSignal | undefined> {
-    const [signal] = await db.select()
-      .from(marketSignals)
-      .where(and(eq(marketSignals.terminalId, terminalId), eq(marketSignals.productType, productType)))
-      .orderBy(desc(marketSignals.createdAt))
+  async getLatestForecast(terminalId: string): Promise<Forecast | undefined> {
+    const [forecast] = await db
+      .select()
+      .from(forecasts)
+      .where(eq(forecasts.terminalId, terminalId))
+      .orderBy(desc(forecasts.createdAt))
       .limit(1);
+
+    return forecast;
+  }
+
+  // ---------------- SIGNALS ----------------
+  async createSignal(data: any): Promise<MarketSignal> {
+    const [signal] = await db.insert(marketSignals).values(data).returning();
     return signal;
   }
 
-  async createSignal(signal: any): Promise<MarketSignal> {
-    const [newSignal] = await db.insert(marketSignals).values(signal).returning();
-    return newSignal;
+  async getLatestSignal(terminalId: string): Promise<MarketSignal | undefined> {
+    const [signal] = await db
+      .select()
+      .from(marketSignals)
+      .where(eq(marketSignals.terminalId, terminalId))
+      .orderBy(desc(marketSignals.createdAt))
+      .limit(1);
+
+    return signal;
   }
 
-  async getSignalHistory(terminalId: string, limit: number = 20): Promise<MarketSignal[]> {
-    return await db.select().from(marketSignals).where(eq(marketSignals.terminalId, terminalId)).orderBy(desc(marketSignals.createdAt)).limit(limit);
-  }
+  // ---------------- PRICE HISTORY ----------------
+  async getPriceHistory(terminalId: string, days = 30): Promise<PriceHistoryEntry[]> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
 
-  async getPriceHistory(terminalId: string, days: number = 30, productType: string = "PMS"): Promise<PriceHistoryEntry[]> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-    return await db.select()
+    return await db
+      .select()
       .from(priceHistory)
-      .where(and(eq(priceHistory.terminalId, terminalId), eq(priceHistory.productType, productType), gte(priceHistory.date, cutoffDate)))
+      .where(and(eq(priceHistory.terminalId, terminalId), gte(priceHistory.date, cutoff)))
       .orderBy(priceHistory.date);
   }
 
-  async getDepots(terminalId?: string): Promise<Depot[]> {
-    if (terminalId) return await db.select().from(depots).where(eq(depots.terminalId, terminalId));
+  // ---------------- DEPOTS ----------------
+  async getDepots(): Promise<Depot[]> {
     return await db.select().from(depots);
   }
 
@@ -243,103 +125,95 @@ export class DatabaseStorage implements IStorage {
     return depot;
   }
 
-  async createDepot(depot: any): Promise<Depot> {
-    const [newDepot] = await db.insert(depots).values(depot).returning();
-    return newDepot;
+  async createDepot(data: any): Promise<Depot> {
+    const [depot] = await db.insert(depots).values(data).returning();
+    return depot;
   }
 
+  // ✅ FIXED (main TS2740 issue)
   async getDepotPrices(depotId?: string, productType?: string): Promise<DepotPrice[]> {
-    let query = db.select().from(depotPrices);
-    if (depotId) query = query.where(eq(depotPrices.depotId, depotId));
-    if (productType) query = query.where(eq(depotPrices.productType, productType));
-    const result = await query.orderBy(desc(depotPrices.updatedAt));
-    return result as any; // <-- critical cast
+    const conditions = [];
+
+    if (depotId) conditions.push(eq(depotPrices.depotId, depotId));
+    if (productType) conditions.push(eq(depotPrices.productType, productType));
+
+    return await db
+      .select()
+      .from(depotPrices)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(depotPrices.updatedAt));
   }
 
-  async createDepotPrice(price: any): Promise<DepotPrice> {
-    const [newPrice] = await db.insert(depotPrices).values(price).returning();
-    return newPrice;
+  async createDepotPrice(data: any): Promise<DepotPrice> {
+    const [price] = await db.insert(depotPrices).values(data).returning();
+    return price;
   }
 
   async updateDepotPrice(id: string, price: number): Promise<DepotPrice | undefined> {
-    const [updated] = await db.update(depotPrices).set({ price, updatedAt: new Date() } as any).where(eq(depotPrices.id, id)).returning();
+    const [updated] = await db
+      .update(depotPrices)
+      .set({ price, updatedAt: new Date() } as any)
+      .where(eq(depotPrices.id, id))
+      .returning();
+
     return updated;
   }
 
-  async getRefineryUpdates(limit: number = 20): Promise<RefineryUpdate[]> {
-    return await db.select().from(refineryUpdates).orderBy(desc(refineryUpdates.createdAt)).limit(limit);
-  }
-
-  async getRegulationUpdates(limit: number = 20): Promise<RegulationUpdate[]> {
-    return await db.select().from(regulationUpdates).orderBy(desc(regulationUpdates.createdAt)).limit(limit);
-  }
-
-  async getHighImpactRegulations(): Promise<RegulationUpdate[]> {
-    return await db.select().from(regulationUpdates).where(eq(regulationUpdates.impactLevel, "high")).orderBy(desc(regulationUpdates.createdAt));
-  }
-
-  async getFxRates(limit: number = 10): Promise<FxRate[]> {
+  // ---------------- FX ----------------
+  async getFxRates(limit = 10): Promise<FxRate[]> {
     return await db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(limit);
   }
 
-  async getLatestFxRate(): Promise<FxRate | undefined> {
-    const [rate] = await db.select().from(fxRates).orderBy(desc(fxRates.createdAt)).limit(1);
+  async createFxRate(data: any): Promise<FxRate> {
+    const [rate] = await db.insert(fxRates).values(data).returning();
     return rate;
   }
 
-  async createFxRate(rate: any): Promise<FxRate> {
-    const [newRate] = await db.insert(fxRates).values(rate).returning();
-    return newRate;
-  }
-
+  // ---------------- INVENTORY ----------------
   async getInventory(userId: string): Promise<Inventory[]> {
     return await db.select().from(inventory).where(eq(inventory.userId, userId));
   }
 
-  async getInventoryItem(id: string): Promise<Inventory | undefined> {
-    const [item] = await db.select().from(inventory).where(eq(inventory.id, id));
-    return item;
+  async createInventory(data: any): Promise<Inventory> {
+    const [inv] = await db.insert(inventory).values(data).returning();
+    return inv;
   }
 
-  async createInventory(inv: any): Promise<Inventory> {
-    const [newInv] = await db.insert(inventory).values(inv).returning();
-    return newInv;
-  }
-
-  async updateInventory(id: string, data: Partial<Inventory>): Promise<Inventory | undefined> {
-    const [updated] = await db.update(inventory).set({ ...data, lastUpdated: new Date() } as any).where(eq(inventory.id, id)).returning();
-    return updated;
+  async createTransaction(data: any): Promise<Transaction> {
+    const [tx] = await db.insert(transactions).values(data).returning();
+    return tx;
   }
 
   async getTransactions(inventoryId: string): Promise<Transaction[]> {
-    return await db.select().from(transactions).where(eq(transactions.inventoryId, inventoryId)).orderBy(desc(transactions.date));
+    return await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.inventoryId, inventoryId))
+      .orderBy(desc(transactions.date));
   }
 
-  async createTransaction(transaction: any): Promise<Transaction> {
-    const [newTx] = await db.insert(transactions).values(transaction).returning();
-    return newTx;
-  }
-
-  async getTraderSignals(limit: number = 50): Promise<TraderSignal[]> {
+  // ---------------- TRADER SIGNALS ----------------
+  async getTraderSignals(limit = 50): Promise<TraderSignal[]> {
     return await db.select().from(traderSignals).orderBy(desc(traderSignals.createdAt)).limit(limit);
   }
 
-  async createTraderSignal(signal: any): Promise<TraderSignal> {
-    const [newSignal] = await db.insert(traderSignals).values(signal).returning();
-    return newSignal;
+  async createTraderSignal(data: any): Promise<TraderSignal> {
+    const [signal] = await db.insert(traderSignals).values(data).returning();
+    return signal;
   }
 
-  async getTraderSignalsByTerminal(terminalId: string, limit: number = 20): Promise<TraderSignal[]> {
-    return await db.select().from(traderSignals).where(eq(traderSignals.terminalId, terminalId)).orderBy(desc(traderSignals.createdAt)).limit(limit);
-  }
-
+  // ---------------- HEDGE ----------------
   async getHedgeRecommendations(userId: string): Promise<HedgeRecommendation[]> {
-    return await db.select().from(hedgeRecommendations).where(eq(hedgeRecommendations.userId, userId)).orderBy(desc(hedgeRecommendations.createdAt));
+    return await db
+      .select()
+      .from(hedgeRecommendations)
+      .where(eq(hedgeRecommendations.userId, userId))
+      .orderBy(desc(hedgeRecommendations.createdAt));
   }
 
-  async createHedgeRecommendation(recommendation: any): Promise<HedgeRecommendation> {
-    const [newRec] = await db.insert(hedgeRecommendations).values(recommendation).returning();
-    return newRec;
+  async createHedgeRecommendation(data: any): Promise<HedgeRecommendation> {
+    const [rec] = await db.insert(hedgeRecommendations).values(data).returning();
+    return rec;
   }
 }
 
