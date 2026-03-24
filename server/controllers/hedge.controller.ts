@@ -22,10 +22,7 @@ export async function generateHedgeRecommendations(req: AuthRequest, res: Respon
 
     const inventory = await storage.getInventory(userId);
     const terminals = await storage.getAllTerminals();
-    const signals = await Promise.all(terminals.map(async (terminal) => {
-      const signal = await storage.getLatestSignal(terminal.id);
-      return { terminal, signal };
-    }));
+    const signals = await Promise.all(terminals.map(async terminal => ({ terminal, signal: await storage.getLatestSignal(terminal.id) })));
     const depotPrices = await storage.getDepotPrices();
 
     const pricesByProduct: Record<string, number[]> = {};
@@ -100,10 +97,7 @@ export async function getAdvancedAnalysis(req: AuthRequest, res: Response) {
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
     const terminals = await storage.getAllTerminals();
-    const terminalSignals = await Promise.all(terminals.map(async terminal => ({
-      terminal,
-      signal: await storage.getLatestSignal(terminal.id),
-    })));
+    const terminalSignals = await Promise.all(terminals.map(async terminal => ({ terminal, signal: await storage.getLatestSignal(terminal.id) })));
 
     const depotPrices = await storage.getDepotPrices();
     const inventory = await storage.getInventory(userId);
