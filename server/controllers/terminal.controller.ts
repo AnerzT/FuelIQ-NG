@@ -4,12 +4,8 @@ import type { AuthRequest } from "../middleware/auth.js";
 
 export async function getTerminals(req: AuthRequest, res: Response) {
   try {
-    const terminalList = await storage.getTerminals();
-
-    return res.json({
-      success: true,
-      data: terminalList,
-    });
+    const terminals = await storage.getAllTerminals();
+    return res.json({ success: true, data: terminals });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
