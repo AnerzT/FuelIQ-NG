@@ -3,7 +3,7 @@ import { storage } from "../storage.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { sendSms } from "../services/smsService.js";
 import { sendWhatsAppMessage } from "../services/whatsappService.js";
-import { ensureString } from "../utils/params.js";
+import { ensureString, ensureNumber } from "../utils/params.js";
 
 export async function getNotificationPrefs(req: AuthRequest, res: Response) {
   try {
