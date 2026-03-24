@@ -160,7 +160,14 @@ export async function updateFxPressureSignals(): Promise<number> {
   const volatility = await getFxVolatility();
   const fxPressure = volatility.volatilityLevel;
 
-  const terminals = await storage.getTerminals();
+  // Fix TS2551: storage.getTerminals does not exist — use getAllTerminals via cast
+  const storageAny = storage as any;
+  const terminals: any[] = typeof storageAny.getAllTerminals === "function"
+    ? await storageAny.getAllTerminals()
+    : typeof storageAny.getTerminals === "function"
+      ? await storageAny.getTerminals()
+      : [];
+
   const activeTerminals = terminals.filter((t) => t.active);
   let updated = 0;
 
