@@ -1,4 +1,4 @@
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "../storage.js";
@@ -15,32 +15,38 @@ function generateTokens(user: any) {
     JWT_SECRET,
     { expiresIn: "7d" }
   );
+
   const refreshToken = jwt.sign(
     { id: user.id },
     JWT_REFRESH_SECRET,
     { expiresIn: "30d" }
   );
+
   return { accessToken, refreshToken };
 }
 
 export async function register(req: Request, res: Response) {
   try {
     const parsed = registerSchema.safeParse(req.body);
+
     if (!parsed.success) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: parsed.error.issues[0]?.message || "Invalid input",
       });
+      return;
     }
 
     const { name, email, password, phone, whatsappPhone } = parsed.data;
 
     const existing = await storage.getUserByEmail(email);
     if (existing) {
-      return res.status(400).json({ success: false, message: "Email already registered" });
+      res.status(400).json({ success: false, message: "Email already registered" });
+      return;
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const user = await storage.createUser({
       name,
       email,
@@ -52,9 +58,8 @@ export async function register(req: Request, res: Response) {
 
     const { accessToken, refreshToken } = generateTokens(user);
 
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      message: "User registered successfully",
       data: {
         user: { id: user.id, name: user.name, email: user.email, role: user.role },
         accessToken,
@@ -62,35 +67,39 @@ export async function register(req: Request, res: Response) {
       },
     });
   } catch (err: any) {
-    console.error("Registration error:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 }
 
 export async function login(req: Request, res: Response) {
   try {
     const parsed = loginSchema.safeParse(req.body);
+
     if (!parsed.success) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: parsed.error.issues[0]?.message || "Invalid input",
       });
+      return;
     }
 
     const { email, password } = parsed.data;
+
     const user = await storage.getUserByEmail(email);
     if (!user) {
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
+      res.status(401).json({ success: false, message: "Invalid credentials" });
+      return;
     }
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
+      res.status(401).json({ success: false, message: "Invalid credentials" });
+      return;
     }
 
     const { accessToken, refreshToken } = generateTokens(user);
 
-    return res.json({
+    res.json({
       success: true,
       data: {
         user: { id: user.id, name: user.name, email: user.email, role: user.role },
@@ -99,62 +108,60 @@ export async function login(req: Request, res: Response) {
       },
     });
   } catch (err: any) {
-    console.error("Login error:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 }
 
 export async function getMe(req: AuthRequest, res: Response) {
   try {
     const userId = ensureString(req.userId);
-    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
 
     const user = await storage.getUser(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    return res.json({
-      success: true,
-      data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        whatsappPhone: user.whatsappPhone,
-        subscriptionTier: user.subscriptionTier,
-        assignedTerminalId: user.assignedTerminalId,
-      },
-    });
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    res.json({ success: true, data: user });
   } catch (err: any) {
-    console.error("GetMe error:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 }
 
 export async function refreshToken(req: AuthRequest, res: Response) {
   try {
-    const refreshToken = ensureString(req.body.refreshToken);
-    if (!refreshToken) {
-      return res.status(400).json({ success: false, message: "Refresh token required" });
+    const token = ensureString(req.body.refreshToken);
+
+    if (!token) {
+      res.status(400).json({ success: false, message: "Refresh token required" });
+      return;
     }
 
     let payload: any;
+
     try {
-      payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
-    } catch (err) {
-      return res.status(401).json({ success: false, message: "Invalid refresh token" });
+      payload = jwt.verify(token, JWT_REFRESH_SECRET);
+    } catch {
+      res.status(401).json({ success: false, message: "Invalid refresh token" });
+      return;
     }
 
     const user = await storage.getUser(payload.id);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
-    return res.json({
-      success: true,
-      data: { accessToken, refreshToken: newRefreshToken },
-    });
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    const tokens = generateTokens(user);
+    res.json({ success: true, data: tokens });
   } catch (err: any) {
-    console.error("Refresh error:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 }
