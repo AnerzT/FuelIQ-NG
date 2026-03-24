@@ -60,7 +60,7 @@ export async function createForecast(req: AuthRequest, res: Response) {
     const terminal = await storage.getTerminal(terminalId);
     if (!terminal) return res.status(404).json({ success: false, message: "Terminal not found" });
 
-    const forecastData = {
+    const forecastData: any = {
       terminalId,
       productType,
       expectedMin: body.expectedMin,
@@ -68,10 +68,10 @@ export async function createForecast(req: AuthRequest, res: Response) {
       bias: body.bias,
       confidence: body.confidence,
       suggestedAction: body.suggestedAction,
-      depotPrice: body.depotPrice || 0,
-      refineryInfluenceScore: body.refineryInfluenceScore || 0,
-      importParityPrice: body.importParityPrice || 0,
-      demandIndex: body.demandIndex || 0,
+      depotPrice: body.depotPrice ?? 0,
+      refineryInfluenceScore: body.refineryInfluenceScore ?? 0,
+      importParityPrice: body.importParityPrice ?? 0,
+      demandIndex: body.demandIndex ?? 0,
     };
 
     const forecast = await storage.createForecast(forecastData);
@@ -94,10 +94,20 @@ export async function generateForecast(req: AuthRequest, res: Response) {
     const signal = await storage.getLatestSignal(terminalId, productType);
     if (!signal) return res.status(400).json({ success: false, message: "No market signals available" });
 
-    const history = await storage.getPriceHistory(terminalId, 30, productType);
-    const result = computeForecast(signal, history, productType);
+    // Ensure signal has all required fields before passing to computeForecast
+    const normalizedSignal = {
+      ...signal,
+      vesselActivity: signal.vesselActivity ?? "unknown",
+      truckQueue: signal.truckQueue ?? "unknown",
+      nnpcSupply: signal.nnpcSupply ?? "unknown",
+      fxPressure: signal.fxPressure ?? "unknown",
+      policyRisk: signal.policyRisk ?? "unknown",
+    };
 
-    const forecast = await storage.createForecast({
+    const history = await storage.getPriceHistory(terminalId, 30, productType);
+    const result = computeForecast(normalizedSignal, history, productType);
+
+    const forecastData: any = {
       terminalId,
       productType,
       depotPrice: 0,
@@ -105,15 +115,25 @@ export async function generateForecast(req: AuthRequest, res: Response) {
       importParityPrice: 0,
       demandIndex: 0,
       ...result,
-    });
+    };
 
-    if (req.userId) storage.incrementForecastCount?.(req.userId).catch(() => {});
-    onForecastCreated(terminalId, forecast).catch(err => console.error("[Notify] Error in forecast notification:", err.message));
+    const forecast = await storage.createForecast(forecastData);
+
+    if (req.userId) {
+      const storageAny = storage as any;
+      if (typeof storageAny.incrementForecastCount === "function") {
+        storageAny.incrementForecastCount(req.userId).catch(() => {});
+      }
+    }
+
+    onForecastCreated(terminalId, forecast).catch(err =>
+      console.error("[Notify] Error in forecast notification:", err.message)
+    );
 
     return res.status(201).json({
       success: true,
       message: "Forecast generated from market signals",
-      data: { terminal, forecast, signalSnapshot: signal },
+      data: { terminal, forecast, signalSnapshot: normalizedSignal },
     });
   } catch (err: any) {
     console.error("Error in generateForecast:", err);
@@ -166,15 +186,31 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
     const signal = await storage.getLatestSignal(terminalId, productType);
     if (!signal) return res.status(400).json({ success: false, message: "No market signals available" });
 
+    // Ensure signal has all required fields before passing to computeForecastScore
+    const normalizedSignal = {
+      ...signal,
+      vesselActivity: signal.vesselActivity ?? "unknown",
+      truckQueue: signal.truckQueue ?? "unknown",
+      nnpcSupply: signal.nnpcSupply ?? "unknown",
+      fxPressure: signal.fxPressure ?? "unknown",
+      policyRisk: signal.policyRisk ?? "unknown",
+    };
+
     const [history, fxRates] = await Promise.all([
       storage.getPriceHistory(terminalId, 30, productType),
       storage.getFxRates(10),
     ]);
     const nnpcFeed = null;
 
-    const score = computeForecastScore({ signal, priceHistory: history, nnpcFeed, fxRates, productType });
+    const score = computeForecastScore({
+      signal: normalizedSignal,
+      priceHistory: history,
+      nnpcFeed,
+      fxRates,
+      productType,
+    });
 
-    const forecast = await storage.createForecast({
+    const forecastData: any = {
       terminalId,
       productType,
       expectedMin: score.expectedRange.min,
@@ -186,9 +222,13 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
       refineryInfluenceScore: 0,
       importParityPrice: 0,
       demandIndex: 0,
-    });
+    };
 
-    onForecastCreated(terminalId, forecast).catch(err => console.error("[Notify] Error in score notification:", err.message));
+    const forecast = await storage.createForecast(forecastData);
+
+    onForecastCreated(terminalId, forecast).catch(err =>
+      console.error("[Notify] Error in score notification:", err.message)
+    );
 
     return res.status(201).json({
       success: true,
@@ -205,7 +245,7 @@ export async function scoreForecast(req: AuthRequest, res: Response) {
           riskFactor: score.riskFactor,
           scoring: score.scoring,
         },
-        signalSnapshot: signal,
+        signalSnapshot: normalizedSignal,
       },
     });
   } catch (err: any) {
