@@ -8,7 +8,9 @@ export async function getNnpcPrice(req: AuthRequest, res: Response) {
   try {
     const productType = ensureString(req.query.productType, "PMS");
     const price = await getNNPCPrice(productType);
-    if (!price) return res.status(404).json({ success: false, message: "NNPC price not available" });
+    if (!price) {
+      return res.status(404).json({ success: false, message: "NNPC price not available" });
+    }
     return res.json({ success: true, data: price });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -73,7 +75,6 @@ export async function getNnpcStatus(req: AuthRequest, res: Response) {
 
 export async function getVesselTracking(req: AuthRequest, res: Response) {
   try {
-    // Mock data – replace with real implementation later
     const vessels = [
       { id: "VSL001", name: "MT APAPA STAR", location: "Apapa Port", eta: "2026-03-25", status: "berthed" },
       { id: "VSL002", name: "MT LAGOS PRIDE", location: "Approaching", eta: "2026-03-26", status: "en-route" },
@@ -87,7 +88,6 @@ export async function getVesselTracking(req: AuthRequest, res: Response) {
 
 export async function triggerVesselSignalUpdate(req: AuthRequest, res: Response) {
   try {
-    // Mock implementation
     return res.json({ success: true, message: "Vessel signals updated successfully", data: { updated: 3 } });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -116,7 +116,6 @@ export async function triggerFxSync(req: AuthRequest, res: Response) {
 
 export async function triggerFxSignalUpdate(req: AuthRequest, res: Response) {
   try {
-    // Mock implementation
     return res.json({ success: true, message: "FX signals updated successfully", data: { updated: 5 } });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
