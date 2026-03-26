@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   root: path.resolve(process.cwd(), "client"),
   build: {
-    outDir: path.resolve(process.cwd(), "dist"),
+    outDir: path.resolve(process.cwd(), "dist/client"),
     emptyOutDir: true,
   },
   resolve: {
