@@ -163,6 +163,17 @@ export async function registerRoutes(
   app.get("/api/regulations", ...withTier, requireTier("pro"), getRegulations);
   app.get("/api/regulations/high-impact", ...withTier, requireTier("pro"), getHighImpactRegulations);
 
+  // Debug endpoint – no authentication required
+  app.get("/api/debug/terminals", async (req, res) => {
+    try {
+      const terminals = await storage.getAllTerminals();
+      res.json(terminals);
+    } catch (err) {
+      console.error("Debug terminals error:", err);
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   return httpServer;
 }
 
