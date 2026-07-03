@@ -10,6 +10,7 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
 import Admin from "@/pages/admin";
+import AdminHome from "@/pages/admin-home";
 import SubscriptionPage from "@/pages/subscription";
 import PrivacyPolicy from "@/pages/privacy";
 import NotFound from "@/pages/not-found";
@@ -21,7 +22,8 @@ function AppRoutes() {
     <>
       <Switch>
         <Route path="/dashboard" component={Dashboard} />
-        <Route path="/admin" component={Admin} />
+        <Route path="/admin" component={AdminHome} />
+        <Route path="/admin/panel" component={Admin} />
         <Route path="/subscription" component={SubscriptionPage} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />

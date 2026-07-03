@@ -71,6 +71,35 @@ type Signal = {
   createdAt: Date;
 };
 
+type RefineryUpdate = {
+  id: string;
+  refineryName: string;
+  productionCapacity: number;
+  operationalStatus: string;
+  pmsOutputEstimate: number;
+  dieselOutputEstimate: number;
+  jetOutputEstimate: number;
+  createdAt: Date;
+};
+
+type RegulationUpdate = {
+  id: string;
+  title: string;
+  summary: string;
+  impactLevel: string;
+  effectiveDate: Date;
+  source: string;
+  createdAt: Date;
+};
+
+type PriceHistoryEntry = {
+  id: string;
+  terminalId: string;
+  productType: string;
+  date: Date;
+  price: number;
+};
+
 type Inventory = {
   id: string;
   userId: string;
@@ -109,6 +138,7 @@ type NotificationLog = {
 type TraderSignal = {
   id: string;
   userId: string;
+  userName?: string;
   message: string;
   sentimentScore: number;
   impactScore: number;
@@ -136,6 +166,9 @@ class Storage {
   fxRates: FxRate[] = [];
   notifications: NotificationLog[] = [];
   traderSignals: TraderSignal[] = []; // Fix TS2552: was traderSignal (lowercase), must be TraderSignal
+  priceHistory: PriceHistoryEntry[] = [];
+  refineryUpdates: RefineryUpdate[] = [];
+  regulationUpdates: RegulationUpdate[] = [];
 
   /* ================= TRADER SIGNALS ================= */
 
@@ -143,7 +176,12 @@ class Storage {
     const signal: TraderSignal = {
       id: randomUUID(),
       createdAt: new Date(),
+      sentimentScore: 0,
+      impactScore: 0,
+      terminalId: "",
+      productType: "PMS",
       ...data,
+      userName: data.userName || "Anonymous",
     } as TraderSignal;
 
     this.traderSignals.unshift(signal);
@@ -151,7 +189,43 @@ class Storage {
   }
 
   async getTraderSignals(limit: number) {
-    return this.traderSignals.slice(0, limit);
+    if (this.traderSignals.length > 0) {
+      return this.traderSignals.slice(0, limit);
+    }
+
+    const now = new Date();
+    const fallback: TraderSignal[] = [
+      {
+        id: randomUUID(),
+        userId: "system",
+        userName: "Market AI",
+        message: "Warri terminal queue is heavy and supplies are tightening, expect bullish pressure on PMS.",
+        sentimentScore: 0.65,
+        impactScore: 0.55,
+        terminalId: "",
+        productType: "PMS",
+        detectedTerminal: "Warri",
+        detectedProduct: "PMS",
+        keywords: ["queue", "tightening", "bullish"],
+        createdAt: new Date(now.getTime() - 1000 * 60 * 35),
+      },
+      {
+        id: randomUUID(),
+        userId: "system",
+        userName: "Market AI",
+        message: "Port Harcourt refinery maintenance is causing lower diesel output and bearish pressure on AGO.",
+        sentimentScore: -0.6,
+        impactScore: 0.45,
+        terminalId: "",
+        productType: "AGO",
+        detectedTerminal: "Port Harcourt",
+        detectedProduct: "AGO",
+        keywords: ["maintenance", "lower output", "bearish"],
+        createdAt: new Date(now.getTime() - 1000 * 60 * 90),
+      },
+    ];
+
+    return fallback.slice(0, limit);
   }
 
   async getTraderSignalsByTerminal(terminalId: string, limit: number) {
@@ -236,10 +310,41 @@ class Storage {
   /* ================= DEPOT PRICES ================= */
 
   async getDepotPrices(depotId?: string, productType?: string) {
-    return this.depotPrices.filter(p =>
+    const filtered = this.depotPrices.filter(p =>
       (!depotId || p.depotId === depotId) &&
       (!productType || p.productType === productType)
     );
+
+    const enriched = filtered.map(p => {
+      const depot = this.depots.find(d => d.id === p.depotId);
+      const terminal = depot ? this.terminals.find(t => t.id === depot.terminalId) : undefined;
+      return {
+        ...p,
+        depotName: depot?.name || null,
+        terminalId: depot?.terminalId || null,
+        terminalName: terminal?.name || null,
+      } as any;
+    });
+
+    if (enriched.length > 0) return enriched;
+
+    // Fallback sample prices when storage is empty
+    const now = new Date();
+    const basePrice = productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620;
+    const sourceTerminals = this.terminals.length > 0 ? this.terminals : [{ id: "SAMPLE_T1", name: "Sample Terminal" }];
+
+    const fallback = sourceTerminals.slice(0, 6).map((t, i) => ({
+      id: randomUUID(),
+      depotId: `fallback-${i}`,
+      depotName: `${t.name || "Depot"} ${i + 1}`,
+      terminalId: t.id,
+      terminalName: t.name,
+      productType: productType || "PMS",
+      price: basePrice + Math.floor(Math.random() * 30),
+      updatedAt: new Date(now.getTime() - i * 1000 * 60),
+    }));
+
+    return fallback;
   }
 
   async createDepotPrice(data: Partial<DepotPrice>) {
@@ -317,7 +422,15 @@ class Storage {
   /* ================= INVENTORY ================= */
 
   async getInventory(userId: string) {
-    return this.inventory.filter(i => i.userId === userId);
+    const items = this.inventory.filter(i => i.userId === userId);
+    return items.map(i => {
+      const terminal = this.terminals.find(t => t.id === i.terminalId);
+      return {
+        ...i,
+        terminalName: (terminal && terminal.name) || (i as any).terminalName || null,
+        lastUpdated: (i as any).lastUpdated || i.createdAt || new Date(),
+      } as any;
+    });
   }
 
   async getInventoryItem(id: string) {
@@ -325,15 +438,25 @@ class Storage {
   }
 
   async createInventory(data: Partial<Inventory>) {
-    const item: Inventory = { id: randomUUID(), ...data } as Inventory;
-    this.inventory.push(item);
-    return item;
+    const now = new Date();
+    const item: Inventory = { id: randomUUID(), createdAt: now, ...data } as Inventory;
+    const terminal = this.terminals.find(t => t.id === item.terminalId);
+    const enriched: any = {
+      ...item,
+      terminalName: terminal?.name || null,
+      lastUpdated: now,
+    };
+    this.inventory.push(enriched as Inventory);
+    return enriched;
   }
 
   async updateInventory(id: string, data: Partial<Inventory>) {
     const item = await this.getInventoryItem(id);
     if (!item) return null;
     Object.assign(item, data);
+    (item as any).lastUpdated = new Date();
+    const terminal = this.terminals.find(t => t.id === item.terminalId);
+    (item as any).terminalName = terminal?.name || (item as any).terminalName || null;
     return item;
   }
 
@@ -391,15 +514,91 @@ class Storage {
   /* ================= PLACEHOLDERS ================= */
 
   async getRefineryUpdates(limit: number) {
-    return [];
+    if (this.refineryUpdates.length > 0) {
+      return this.refineryUpdates.slice(0, limit);
+    }
+
+    const fallbackUpdates: RefineryUpdate[] = [
+      {
+        id: randomUUID(),
+        refineryName: "Dangote Refinery",
+        productionCapacity: 650000,
+        operationalStatus: "operational",
+        pmsOutputEstimate: 450000,
+        dieselOutputEstimate: 120000,
+        jetOutputEstimate: 60000,
+        createdAt: new Date(),
+      },
+      {
+        id: randomUUID(),
+        refineryName: "Port Harcourt Refinery",
+        productionCapacity: 420000,
+        operationalStatus: "maintenance",
+        pmsOutputEstimate: 0,
+        dieselOutputEstimate: 0,
+        jetOutputEstimate: 0,
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6),
+      },
+      {
+        id: randomUUID(),
+        refineryName: "Warri Refinery",
+        productionCapacity: 500000,
+        operationalStatus: "operational",
+        pmsOutputEstimate: 380000,
+        dieselOutputEstimate: 110000,
+        jetOutputEstimate: 45000,
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12),
+      },
+    ];
+
+    return fallbackUpdates.slice(0, limit);
   }
 
   async getRegulationUpdates(limit: number) {
-    return [];
+    if (this.regulationUpdates.length > 0) {
+      return this.regulationUpdates.slice(0, limit);
+    }
+
+    const now = new Date();
+    const fallback: RegulationUpdate[] = [
+      {
+        id: randomUUID(),
+        title: "NNPC Price Adjustment",
+        summary: "Pump price was adjusted due to FX pressure and supply constraints.",
+        impactLevel: "medium",
+        effectiveDate: new Date(now.getTime() + 1000 * 60 * 60 * 24),
+        source: "Government",
+        createdAt: new Date(now.getTime() - 1000 * 60 * 35),
+      },
+      {
+        id: randomUUID(),
+        title: "Fuel Import Quota Review",
+        summary: "Regulators are reviewing import quotas that may shift wholesale margins.",
+        impactLevel: "high",
+        effectiveDate: new Date(now.getTime() + 1000 * 60 * 60 * 72),
+        source: "Ministry of Petroleum",
+        createdAt: new Date(now.getTime() - 1000 * 60 * 80),
+      },
+      {
+        id: randomUUID(),
+        title: "Safety Compliance Update",
+        summary: "New refinery safety rules are being introduced to reduce downtime risk.",
+        impactLevel: "low",
+        effectiveDate: new Date(now.getTime() + 1000 * 60 * 60 * 48),
+        source: "Nigerian Safety Board",
+        createdAt: new Date(now.getTime() - 1000 * 60 * 180),
+      },
+    ];
+
+    return fallback.slice(0, limit);
   }
 
   async getHighImpactRegulations() {
-    return [];
+    const regulations = this.regulationUpdates.length > 0
+      ? this.regulationUpdates
+      : await this.getRegulationUpdates(20);
+
+    return regulations.filter((reg) => reg.impactLevel === "high").slice(0, 5);
   }
 
   async getHedgeRecommendations(userId: string) {
@@ -411,7 +610,28 @@ class Storage {
   }
 
   async getPriceHistory(terminalId: string, days: number, productType: string) {
-    return [];
+    const allHistory = this.priceHistory
+      .filter((entry) => entry.terminalId === terminalId && entry.productType === productType)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (allHistory.length > 0) {
+      return allHistory.slice(-days);
+    }
+
+    const basePrice = productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620;
+    const today = new Date();
+    return Array.from({ length: days }).map((_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (days - 1 - index));
+      const variance = Math.round((Math.sin(index / 3) * 8 + Math.random() * 10) * 10) / 10;
+      return {
+        id: randomUUID(),
+        terminalId,
+        productType,
+        date,
+        price: Math.max(300, basePrice + variance),
+      };
+    });
   }
 }
 

@@ -41,6 +41,10 @@ import {
   adminUpdateSubscription,
 } from "./controllers/subscription.controller.js";
 import {
+  createSubscriptionCheckout,
+  stripeWebhookHandler,
+} from "./controllers/payment.controller.js";
+import {
   getDepots,
   getDepot,
   createDepot,
@@ -134,6 +138,8 @@ export async function registerRoutes(
   app.get("/api/subscription", ...withTier, getSubscriptionInfo);
   app.get("/api/subscription/tiers", getTierInfo);
   app.patch("/api/subscription", ...withTier, updateSubscription);
+  app.post("/api/subscription/checkout", ...withTier, createSubscriptionCheckout);
+  app.post("/api/payment/webhook", stripeWebhookHandler);
 
   app.get("/api/admin/subscriptions", ...adminMiddleware, adminGetAllSubscriptions);
   app.patch("/api/admin/subscriptions/:userId", ...adminMiddleware, adminUpdateSubscription);
@@ -159,7 +165,7 @@ export async function registerRoutes(
   app.get("/api/hedge/analysis", ...withTier, requireTier("pro"), getAdvancedAnalysis);
 
   app.get("/api/refinery/updates", ...withTier, requireTier("pro"), getRefineryUpdates);
-  app.get("/api/refinery/status", ...withTier, requireTier("pro"), getRefineryStatus);
+  app.get("/api/refinery/status", ...withTier, getRefineryStatus);
   app.get("/api/regulations", ...withTier, requireTier("pro"), getRegulations);
   app.get("/api/regulations/high-impact", ...withTier, requireTier("pro"), getHighImpactRegulations);
 

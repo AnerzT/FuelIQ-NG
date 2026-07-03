@@ -167,6 +167,22 @@ function CardSkeleton() {
   );
 }
 
+function formatRelativeTime(date: Date | string | null): string {
+  if (!date) return "No updates yet";
+  const target = new Date(date);
+  if (Number.isNaN(target.getTime())) return "No updates yet";
+
+  const diffMinutes = Math.max(0, Math.round((Date.now() - target.getTime()) / 60000));
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+}
+
 function ChartSkeleton() {
   return (
     <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5" data-testid="skeleton-chart">
@@ -194,10 +210,7 @@ interface ForecastResponse {
   forecast: Forecast;
 }
 
-interface SignalResponse {
-  terminal: Terminal;
-  signal: MarketSignal;
-}
+interface SignalResponse extends MarketSignal {}
 
 export default function Dashboard() {
   const { user, token, logout } = useAuth();
@@ -220,7 +233,7 @@ export default function Dashboard() {
   }, [terminalList, selectedTerminalId]);
 
   const { data: forecastData, isLoading: forecastLoading, refetch: refetchForecast, isFetching: forecastFetching } = useQuery<ForecastResponse>({
-    queryKey: ["/api/forecast", selectedTerminalId],
+    queryKey: ["/api/forecast", `${selectedTerminalId}?productType=${selectedProduct}`],
     queryFn: fetchFn,
     enabled: !!selectedTerminalId && !!token,
   });
@@ -306,7 +319,15 @@ export default function Dashboard() {
 
   const forecast = forecastData?.forecast;
   const terminal = forecastData?.terminal;
-  const signal = signalData?.signal;
+  const signal = signalData;
+  const terminalInfo = terminal || selectedTerminal;
+  const isForecastLoading = forecastLoading || forecastFetching;
+
+  const latestPriceEntry = chartData[chartData.length - 1];
+  const previousPriceEntry = chartData[chartData.length - 2];
+  const priceDelta = latestPriceEntry && previousPriceEntry ? latestPriceEntry.price - previousPriceEntry.price : 0;
+  const deltaLabel = priceDelta > 0 ? `+₦${priceDelta.toLocaleString()}` : priceDelta < 0 ? `-₦${Math.abs(priceDelta).toLocaleString()}` : "₦0";
+  const deltaColor = priceDelta > 0 ? "text-emerald-400" : priceDelta < 0 ? "text-red-400" : "text-slate-400";
 
   const currentDate = new Date().toLocaleDateString("en-NG", {
     weekday: "long",
@@ -333,11 +354,18 @@ export default function Dashboard() {
               <span className="text-lg font-bold tracking-tight text-white hidden sm:block">FuelIQ NG</span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
                 <Calendar className="w-3.5 h-3.5" />
                 <span>{currentDate}</span>
               </div>
+              {isForecastLoading && (
+                <span className="inline-flex flex-shrink-0 items-center gap-2 py-2 px-3 rounded-full bg-emerald-500/15 text-[10px] sm:text-xs font-semibold text-emerald-100 border border-emerald-500/30 shadow-sm shadow-emerald-500/10" data-testid="badge-forecast-loading-header">
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-300" />
+                  <span className="hidden sm:inline">Fetching forecast...</span>
+                  <span className="sm:hidden">Forecast</span>
+                </span>
+              )}
               <button className="relative p-2 rounded-lg hover:bg-white/[0.04] transition-colors" data-testid="button-notifications">
                 <Bell className="w-4 h-4 text-slate-400" />
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -397,8 +425,16 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-xl font-bold text-white" data-testid="text-dashboard-title">Market Dashboard</h1>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold text-white" data-testid="text-dashboard-title">Market Dashboard</h1>
+              {isForecastLoading && (
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-100 border border-emerald-500/20 shadow-sm shadow-emerald-500/10" data-testid="badge-forecast-loading-main">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-300" />
+                  Fetching forecast
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-500">Real-time petroleum market intelligence</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -581,6 +617,21 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
     );
   }
 
+  const refineryStatuses = Array.isArray(refineryStatusData)
+    ? refineryStatusData
+    : refineryStatusData
+      ? [refineryStatusData]
+      : [];
+
+  const activeRefineries = refineryStatuses.filter((r: any) => r.operationalStatus === "operational").length;
+  const maintenanceRefineries = refineryStatuses.filter((r: any) => r.operationalStatus === "maintenance").length;
+  const offlineRefineries = refineryStatuses.filter((r: any) => r.operationalStatus !== "operational" && r.operationalStatus !== "maintenance").length;
+  const totalCapacity = refineryStatuses.reduce((sum: number, r: any) => sum + (r.productionCapacity || 0), 0);
+  const latestRefineryUpdate = refineryStatuses
+    .map((r: any) => new Date(r.createdAt))
+    .reduce((latest: Date | null, current: Date) => current > (latest || new Date(0)) ? current : latest, null as Date | null);
+  const lastUpdatedLabel = formatRelativeTime(latestRefineryUpdate);
+
   return (
     <div className="space-y-5">
       <div className="grid lg:grid-cols-3 gap-5">
@@ -615,27 +666,35 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
         </div>
 
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-4" data-testid="card-terminal-info">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500">Terminal Info</h3>
-          {terminal ? (
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500">Terminal Info</h3>
+            {isForecastLoading && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-slate-300 bg-slate-900/80 border border-slate-700" data-testid="badge-forecast-loading">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                Fetching forecast...
+              </span>
+            )}
+          </div>
+          {terminalInfo ? (
             <div className="space-y-3">
               <div className="py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                 <div className="text-[10px] text-slate-600 uppercase tracking-wider mb-1">Terminal</div>
-                <div className="text-lg font-semibold text-white" data-testid="text-terminal-name">{terminal.name}</div>
+                <div className="text-lg font-semibold text-white" data-testid="text-terminal-name">{terminalInfo.name}</div>
               </div>
               <div className="py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                 <div className="text-[10px] text-slate-600 uppercase tracking-wider mb-1">State</div>
-                <div className="text-base font-medium text-slate-300" data-testid="text-terminal-state">{terminal.state}</div>
+                <div className="text-base font-medium text-slate-300" data-testid="text-terminal-state">{terminalInfo.state}</div>
               </div>
               <div className="py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                 <div className="text-[10px] text-slate-600 uppercase tracking-wider mb-1">Status</div>
                 <span
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    terminal.active ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+                    terminalInfo.active ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
                   }`}
                   data-testid="badge-terminal-status"
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${terminal.active ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-                  {terminal.active ? "Active" : "Inactive"}
+                  <span className={`w-1.5 h-1.5 rounded-full ${terminalInfo.active ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
+                  {terminalInfo.active ? "Active" : "Inactive"}
                 </span>
               </div>
               <div className="py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
@@ -656,12 +715,17 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
         <div className="rounded-xl bg-emerald-500/[0.03] border border-emerald-500/[0.08] p-5 space-y-5" data-testid="card-forecast-output">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-xs uppercase tracking-wider text-emerald-400">Forecast Output</h3>
-            {forecast && (
+            {forecast ? (
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] text-emerald-400 font-medium border border-emerald-500/20">
                 <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
                 Updated
               </span>
-            )}
+            ) : isForecastLoading ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-slate-300 bg-slate-900/80 border border-slate-700" data-testid="badge-forecast-loading">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                Loading forecast...
+              </span>
+            ) : null}
           </div>
           {forecast ? (
             <div className="space-y-5">
@@ -683,7 +747,7 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
               <div className="border-t border-white/[0.06] pt-4">
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2.5">Suggested Action</div>
                 <div className="space-y-2">
-                  {forecast.suggestedAction.split(". ").filter(Boolean).map((action: string, i: number) => (
+                  {(forecast.suggestedAction || "").split(". ").filter(Boolean).map((action: string, i: number) => (
                     <div key={i} className="flex items-start gap-2 text-sm" data-testid={`text-action-${i}`}>
                       <div className="mt-0.5 w-4 h-4 rounded bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
                         <ChevronRight className="w-3 h-3 text-emerald-500" />
@@ -694,6 +758,8 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
                 </div>
               </div>
             </div>
+          ) : isForecastLoading ? (
+            <div className="text-sm text-slate-400 py-12 text-center">Fetching the latest forecast for this terminal...</div>
           ) : (
             <div className="text-sm text-slate-600 py-12 text-center">No forecast available</div>
           )}
@@ -702,8 +768,16 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
 
       {historyLoading ? <ChartSkeleton /> : (
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5" data-testid="card-price-chart">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-            <h3 className="font-semibold text-white">Price Trend (Last 30 Days)</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h3 className="font-semibold text-white">Price Trend (Last 30 Days)</h3>
+              {latestPriceEntry && (
+                <div className="text-sm text-slate-400 mt-1">
+                  Latest: <span className="font-semibold text-white">₦{latestPriceEntry.price.toLocaleString()}</span>
+                  <span className={`ml-3 ${deltaColor}`}>{deltaLabel} vs yesterday</span>
+                </div>
+              )}
+            </div>
             {selectedTerminal && (
               <span className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs font-mono text-emerald-400">
                 {selectedTerminal.name}
@@ -732,96 +806,113 @@ function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, h
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-5">
-        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-refinery-status">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
-            <Factory className="w-3.5 h-3.5" /> Refinery Status
-          </h3>
-          {(() => {
-            const statuses = Array.isArray(refineryStatusData) ? refineryStatusData : (refineryStatusData?.data || []);
-            if (statuses.length > 0) {
-              return statuses.slice(0, 4).map((r: any, i: number) => (
-                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid={`status-refinery-${i}`}>
-                  <span className="text-sm text-slate-300 truncate mr-2">{r.refineryName}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
-                    r.operationalStatus === "operational" ? "text-emerald-400 bg-emerald-500/10" :
-                    r.operationalStatus === "maintenance" ? "text-amber-400 bg-amber-500/10" :
-                    "text-red-400 bg-red-500/10"
-                  }`}>{r.operationalStatus}</span>
-                </div>
-              ));
-            }
-            return <div className="text-sm text-slate-600 py-4 text-center">No refinery data</div>;
-          })()}
+      <div className="space-y-5">
+        <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-testid="card-refinery-summary">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500">Refinery Status Summary</div>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-sm">Operational: {activeRefineries}</span>
+              <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 text-sm">Maintenance: {maintenanceRefineries}</span>
+              <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-300 border border-red-500/20 text-sm">Offline: {offlineRefineries}</span>
+            </div>
+          </div>
+          <div className="text-right text-sm text-slate-400 space-y-1">
+            <div>Total capacity: <span className="text-white font-semibold">{totalCapacity.toLocaleString()} bbl/day</span></div>
+            <div>Last updated: <span className="text-white font-semibold">{lastUpdatedLabel}</span></div>
+          </div>
         </div>
 
-        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-regulation-impact">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
-            <ScrollText className="w-3.5 h-3.5" /> Latest Regulation Impact
-          </h3>
-          {(() => {
-            const regs = Array.isArray(regulationData) ? regulationData : (regulationData?.data || []);
-            const highImpact = regs.filter((r: any) => r.impactLevel === "high");
-            const toShow = highImpact.length > 0 ? highImpact.slice(0, 3) : regs.slice(0, 3);
-            if (toShow.length > 0) {
-              return toShow.map((reg: any, i: number) => (
-                <div key={i} className="py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04] space-y-1" data-testid={`overview-reg-${i}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white truncate mr-2">{reg.title}</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                      reg.impactLevel === "high" ? "text-red-400 bg-red-500/10" :
-                      reg.impactLevel === "medium" ? "text-amber-400 bg-amber-500/10" :
-                      "text-emerald-400 bg-emerald-500/10"
-                    }`}>{reg.impactLevel}</span>
+        <div className="grid lg:grid-cols-3 gap-5">
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-refinery-status">
+            <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <Factory className="w-3.5 h-3.5" /> Refinery Status
+            </h3>
+            {(() => {
+              const statuses = Array.isArray(refineryStatusData) ? refineryStatusData : (refineryStatusData?.data || []);
+              if (statuses.length > 0) {
+                return statuses.slice(0, 4).map((r: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid={`status-refinery-${i}`}>
+                    <span className="text-sm text-slate-300 truncate mr-2">{r.refineryName}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+                      r.operationalStatus === "operational" ? "text-emerald-400 bg-emerald-500/10" :
+                      r.operationalStatus === "maintenance" ? "text-amber-400 bg-amber-500/10" :
+                      "text-red-400 bg-red-500/10"
+                    }`}>{r.operationalStatus}</span>
                   </div>
-                  <p className="text-xs text-slate-500 line-clamp-2">{reg.summary}</p>
-                </div>
-              ));
-            }
-            return <div className="text-sm text-slate-600 py-4 text-center">No regulation alerts</div>;
-          })()}
-        </div>
+                ));
+              }
+              return <div className="text-sm text-slate-600 py-4 text-center">No refinery data</div>;
+            })()}
+          </div>
 
-        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-trader-sentiment">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
-            <MessageSquare className="w-3.5 h-3.5" /> Trader Sentiment
-          </h3>
-          {(() => {
-            const signals = Array.isArray(traderSignalsData) ? traderSignalsData : (traderSignalsData?.signals || []);
-            if (signals.length > 0) {
-              const bullish = signals.filter((s: any) => (s.sentimentScore ?? 0) > 0.3).length;
-              const bearish = signals.filter((s: any) => (s.sentimentScore ?? 0) < -0.3).length;
-              const neutral = signals.length - bullish - bearish;
-              const total = signals.length;
-              return (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-3 rounded-full bg-white/[0.04] overflow-hidden flex">
-                      {bullish > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(bullish / total) * 100}%` }} />}
-                      {neutral > 0 && <div className="h-full bg-amber-500" style={{ width: `${(neutral / total) * 100}%` }} />}
-                      {bearish > 0 && <div className="h-full bg-red-500" style={{ width: `${(bearish / total) * 100}%` }} />}
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-regulation-impact">
+            <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <ScrollText className="w-3.5 h-3.5" /> Latest Regulation Impact
+            </h3>
+            {(() => {
+              const regs = Array.isArray(regulationData) ? regulationData : (regulationData?.data || []);
+              const highImpact = regs.filter((r: any) => r.impactLevel === "high");
+              const toShow = highImpact.length > 0 ? highImpact.slice(0, 3) : regs.slice(0, 3);
+              if (toShow.length > 0) {
+                return toShow.map((reg: any, i: number) => (
+                  <div key={i} className="py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04] space-y-1" data-testid={`overview-reg-${i}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white truncate mr-2">{reg.title}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                        reg.impactLevel === "high" ? "text-red-400 bg-red-500/10" :
+                        reg.impactLevel === "medium" ? "text-amber-400 bg-amber-500/10" :
+                        "text-emerald-400 bg-emerald-500/10"
+                      }`}>{reg.impactLevel}</span>
                     </div>
+                    <p className="text-xs text-slate-500 line-clamp-2">{reg.summary}</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="py-2 px-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20" data-testid="sentiment-bullish">
-                      <div className="text-lg font-bold text-emerald-400">{bullish}</div>
-                      <div className="text-[10px] text-emerald-400/70 uppercase">Bullish</div>
+                ));
+              }
+              return <div className="text-sm text-slate-600 py-4 text-center">No regulation alerts</div>;
+            })()}
+          </div>
+
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5 space-y-3" data-testid="card-trader-sentiment">
+            <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <MessageSquare className="w-3.5 h-3.5" /> Trader Sentiment
+            </h3>
+            {(() => {
+              const signals = Array.isArray(traderSignalsData) ? traderSignalsData : (traderSignalsData?.signals || []);
+              if (signals.length > 0) {
+                const bullish = signals.filter((s: any) => (s.sentimentScore ?? 0) > 0.3).length;
+                const bearish = signals.filter((s: any) => (s.sentimentScore ?? 0) < -0.3).length;
+                const neutral = signals.length - bullish - bearish;
+                const total = signals.length;
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-3 rounded-full bg-white/[0.04] overflow-hidden flex">
+                        {bullish > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(bullish / total) * 100}%` }} />}
+                        {neutral > 0 && <div className="h-full bg-amber-500" style={{ width: `${(neutral / total) * 100}%` }} />}
+                        {bearish > 0 && <div className="h-full bg-red-500" style={{ width: `${(bearish / total) * 100}%` }} />}
+                      </div>
                     </div>
-                    <div className="py-2 px-2 rounded-lg bg-amber-500/10 border border-amber-500/20" data-testid="sentiment-neutral">
-                      <div className="text-lg font-bold text-amber-400">{neutral}</div>
-                      <div className="text-[10px] text-amber-400/70 uppercase">Neutral</div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="py-2 px-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20" data-testid="sentiment-bullish">
+                        <div className="text-lg font-bold text-emerald-400">{bullish}</div>
+                        <div className="text-[10px] text-emerald-400/70 uppercase">Bullish</div>
+                      </div>
+                      <div className="py-2 px-2 rounded-lg bg-amber-500/10 border border-amber-500/20" data-testid="sentiment-neutral">
+                        <div className="text-lg font-bold text-amber-400">{neutral}</div>
+                        <div className="text-[10px] text-amber-400/70 uppercase">Neutral</div>
+                      </div>
+                      <div className="py-2 px-2 rounded-lg bg-red-500/10 border border-red-500/20" data-testid="sentiment-bearish">
+                        <div className="text-lg font-bold text-red-400">{bearish}</div>
+                        <div className="text-[10px] text-red-400/70 uppercase">Bearish</div>
+                      </div>
                     </div>
-                    <div className="py-2 px-2 rounded-lg bg-red-500/10 border border-red-500/20" data-testid="sentiment-bearish">
-                      <div className="text-lg font-bold text-red-400">{bearish}</div>
-                      <div className="text-[10px] text-red-400/70 uppercase">Bearish</div>
-                    </div>
+                    <div className="text-xs text-slate-600 text-center">{total} signal{total !== 1 ? "s" : ""} analyzed</div>
                   </div>
-                  <div className="text-xs text-slate-600 text-center">{total} signal{total !== 1 ? "s" : ""} analyzed</div>
-                </div>
-              );
-            }
-            return <div className="text-sm text-slate-600 py-4 text-center">No trader signals yet</div>;
-          })()}
+                );
+              }
+              return <div className="text-sm text-slate-600 py-4 text-center">No trader signals yet</div>;
+            })()}
+          </div>
         </div>
       </div>
     </div>

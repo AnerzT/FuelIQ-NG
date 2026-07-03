@@ -5,9 +5,16 @@ import path from "path";
 export default defineConfig({
   plugins: [react()],
   root: path.resolve(process.cwd(), "client"),
+  server: {
+    proxy: {
+      '/api': 'http://127.0.0.1:4000',
+    },
+  },
   build: {
     outDir: path.resolve(process.cwd(), "dist/client"),
     emptyOutDir: true,
+    minify: "esbuild",
+    cssMinify: false,
   },
   resolve: {
     alias: {

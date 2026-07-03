@@ -27,11 +27,9 @@ export async function getRefineryStatus(req: AuthRequest, res: Response) {
   try {
     const updates = await storage.getRefineryUpdates(5);
 
-    const latest = updates.length > 0 ? updates[0] : null;
-
     return res.json({
       success: true,
-      data: latest,
+      data: updates,
     });
 
   } catch (err: any) {

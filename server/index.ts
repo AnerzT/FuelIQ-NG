@@ -14,8 +14,14 @@ process.on('unhandledRejection', (reason: any) => {
 export async function createApp(): Promise<Express> {
   const app = express();
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  function rawBodySaver(req: Request, res: Response, buf: Buffer, encoding: string) {
+    if (buf && buf.length) {
+      (req as any).rawBody = buf;
+    }
+  }
+
+  app.use(express.json({ verify: rawBodySaver }));
+  app.use(express.urlencoded({ extended: true, verify: rawBodySaver }));
 
   app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

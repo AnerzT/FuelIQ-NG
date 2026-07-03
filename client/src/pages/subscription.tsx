@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { authFetch } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 import {
   Check,
   X,
@@ -73,8 +75,61 @@ function formatFeatureValue(key: string, value: any): { text: string; available:
 }
 
 export default function SubscriptionPage() {
-  const { user, token } = useAuth();
+  const { user, token, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const checkoutMutation = useMutation({
+    mutationFn: async (tier: SubscriptionTier) => {
+      const res = await fetch("/api/subscription/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ subscriptionTier: tier }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to create checkout session");
+      }
+      const json = await res.json();
+      return json.url as string;
+    },
+    onSuccess: (url: string) => {
+      window.location.href = url;
+    },
+    onError: (err: Error) => {
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateSubscriptionMutation = useMutation({
+    mutationFn: async (tier: SubscriptionTier) => {
+      const res = await fetch("/api/subscription", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ subscriptionTier: tier }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to update subscription");
+      }
+      const json = await res.json();
+      return json.data;
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/subscription"] });
+      await refreshUser();
+      toast({ title: "Subscription updated successfully" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Subscription update failed", description: err.message, variant: "destructive" });
+    },
+  });
 
   if (!user) {
     setLocation("/login");
@@ -83,6 +138,18 @@ export default function SubscriptionPage() {
 
   const currentTier = ((user as any).subscriptionTier || "free") as SubscriptionTier;
   const fetchFn = authFetch(token);
+
+  const handleSubscriptionAction = (tier: SubscriptionTier) => {
+    const currentIndex = tierOrder.indexOf(currentTier);
+    const targetIndex = tierOrder.indexOf(tier);
+
+    if (tier === "free" || targetIndex < currentIndex) {
+      updateSubscriptionMutation.mutate(tier);
+      return;
+    }
+
+    checkoutMutation.mutate(tier);
+  };
 
   const { data: subData } = useQuery({
     queryKey: ["/api/subscription"],
@@ -219,20 +286,15 @@ export default function SubscriptionPage() {
                       >
                         Current Plan
                       </Button>
-                    ) : isUpgrade ? (
+                    ) : (
                       <Button
-                        className="w-full bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25 border-0"
+                        className={`w-full ${isUpgrade ? "bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25 border-0" : "bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/[0.08]"}`}
+                        onClick={() => handleSubscriptionAction(tier)}
+                        disabled={updateSubscriptionMutation.isPending || checkoutMutation.isPending}
                         data-testid={`button-tier-${tier}`}
                       >
                         <ChevronRight className="w-4 h-4 mr-1" />
-                        Upgrade to {limits.label}
-                      </Button>
-                    ) : (
-                      <Button
-                        className="w-full bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/[0.08]"
-                        data-testid={`button-tier-${tier}`}
-                      >
-                        Downgrade
+                        {isUpgrade ? `Upgrade to ${limits.label}` : `Switch to ${limits.label}`}
                       </Button>
                     )}
                   </div>

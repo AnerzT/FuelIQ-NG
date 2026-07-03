@@ -7,6 +7,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string }) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -48,6 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, fetchUser]);
 
+  const refreshUser = useCallback(async () => {
+    if (token) {
+      await fetchUser(token);
+    }
+  }, [token, fetchUser]);
+
   const login = async (email: string, password: string) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -60,8 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const json = await res.json();
     const authData = json.data || json;
-    localStorage.setItem("fueliq_token", authData.token);
-    setToken(authData.token);
+    const tokenValue = authData.token || authData.accessToken;
+    if (!tokenValue) {
+      throw new Error("Login response did not include a token");
+    }
+    localStorage.setItem("fueliq_token", tokenValue);
+    setToken(tokenValue);
     setUser(authData.user);
   };
 
@@ -77,8 +88,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const json = await res.json();
     const authData = json.data || json;
-    localStorage.setItem("fueliq_token", authData.token);
-    setToken(authData.token);
+    const tokenValue = authData.token || authData.accessToken;
+    if (!tokenValue) {
+      throw new Error("Registration response did not include a token");
+    }
+    localStorage.setItem("fueliq_token", tokenValue);
+    setToken(tokenValue);
     setUser(authData.user);
   };
 
@@ -89,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

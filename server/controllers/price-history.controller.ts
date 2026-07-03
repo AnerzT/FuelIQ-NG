@@ -5,7 +5,7 @@ import { ensureString, ensureNumber } from "../utils/params.js";
 
 export async function getPriceHistory(req: AuthRequest, res: Response) {
   try {
-    const terminalId = ensureString(req.params.terminalId);
+    const terminalId = ensureString(req.params.terminalId || req.params.id);
     const days = ensureNumber(req.query.days, 30);
     const productType = ensureString(req.query.productType, "PMS");
 

@@ -37,6 +37,19 @@ import { TIER_LIMITS } from "@shared/schema";
 
 type AdminTab = "terminals" | "forecast" | "signals" | "history" | "subscriptions";
 
+interface SubUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tier: string;
+  subscriptionStartDate: string | null;
+  subscriptionEndDate: string | null;
+  smsAlertsUsedThisWeek: number;
+  forecastsUsedToday: number;
+  assignedTerminalId: string | null;
+}
+
 function getBiasIcon(bias: string) {
   const b = bias?.toLowerCase();
   if (b === "bullish") return { Icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10" };
@@ -50,6 +63,35 @@ export default function Admin() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AdminTab>("terminals");
   const fetchFn = authFetch(token);
+  const { data: terminals } = useQuery<Terminal[]>({
+    queryKey: ["/api/admin/terminals"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+  const { data: forecasts } = useQuery<Forecast[]>({
+    queryKey: ["/api/admin/forecasts"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+  const { data: subs } = useQuery<SubUser[]>({
+    queryKey: ["/api/admin/subscriptions"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+
+  const totalTerminals = terminals?.length ?? 0;
+  const activeTerminals = terminals?.filter((t) => t.active).length ?? 0;
+  const inactiveTerminals = totalTerminals - activeTerminals;
+  const totalForecasts = forecasts?.length ?? 0;
+  const weeklyForecasts = forecasts?.filter((f) => {
+    const createdAt = f.createdAt ? new Date(f.createdAt) : null;
+    if (!createdAt) return false;
+    return createdAt >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  }).length ?? 0;
+  const totalUsers = subs?.length ?? 0;
+  const freeUsers = subs?.filter((s) => s.tier === "free").length ?? 0;
+  const proUsers = subs?.filter((s) => s.tier === "pro").length ?? 0;
+  const eliteUsers = subs?.filter((s) => s.tier === "elite").length ?? 0;
 
   if (!user) {
     setLocation("/login");
@@ -110,9 +152,51 @@ export default function Admin() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-amber-400" />
-            <h1 className="text-xl font-bold text-white" data-testid="text-admin-title">Admin Panel</h1>
+            <h1 className="text-xl font-bold text-white" data-testid="text-admin-title">Admin Dashboard</h1>
           </div>
-          <p className="text-sm text-slate-500">Manage terminals, forecasts, and market signals</p>
+          <p className="text-sm text-slate-500">Review terminal health, forecasts, signals, and subscription metrics</p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Terminals</div>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-3xl font-bold text-white">{totalTerminals}</p>
+                <p className="text-sm text-slate-500">Total terminals</p>
+              </div>
+              <div className="text-right text-sm text-slate-400">
+                <div>Active {activeTerminals}</div>
+                <div>Inactive {inactiveTerminals}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Forecasts</div>
+            <div className="mt-3">
+              <p className="text-3xl font-bold text-white">{totalForecasts}</p>
+              <p className="text-sm text-slate-500">Total forecasts</p>
+              <p className="mt-2 text-sm text-slate-400">{weeklyForecasts} in last 7 days</p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Users</div>
+            <div className="mt-3">
+              <p className="text-3xl font-bold text-white">{totalUsers}</p>
+              <p className="text-sm text-slate-500">Total active users</p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Subscription tiers</div>
+            <div className="mt-3 space-y-2 text-sm text-slate-400">
+              <div>Free: {freeUsers}</div>
+              <div>Pro: {proUsers}</div>
+              <div>Elite: {eliteUsers}</div>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -408,7 +492,7 @@ function SignalsPanel({ token, fetchFn, toast }: { token: string | null; fetchFn
   const [fxPressure, setFxPressure] = useState("Low");
   const [policyRisk, setPolicyRisk] = useState("Low");
 
-  const signalQuery = useQuery<{ terminal: Terminal; signal: MarketSignal }>({
+  const signalQuery = useQuery<MarketSignal | null>({
     queryKey: ["/api/signals", terminalId],
     queryFn: fetchFn,
     enabled: !!terminalId && !!token,
@@ -456,7 +540,7 @@ function SignalsPanel({ token, fetchFn, toast }: { token: string | null; fetchFn
     });
   };
 
-  const currentSignal = signalQuery.data?.signal;
+  const currentSignal = signalQuery.data;
 
   const signalOptions = {
     vesselActivity: ["None", "Low", "Moderate", "High"],
@@ -659,19 +743,6 @@ function HistoryPanel({ token, fetchFn }: { token: string | null; fetchFn: any }
       )}
     </div>
   );
-}
-
-interface SubUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  tier: string;
-  subscriptionStartDate: string | null;
-  subscriptionEndDate: string | null;
-  smsAlertsUsedThisWeek: number;
-  forecastsUsedToday: number;
-  assignedTerminalId: string | null;
 }
 
 function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; fetchFn: any; toast: any }) {
