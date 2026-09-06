@@ -14,9 +14,9 @@ import {
   Flame,
   ChevronRight,
 } from "lucide-react";
-import { TIER_LIMITS, type SubscriptionTier } from "@shared/schema";
+import { TIER_LIMITS, TIER_PRICES, type SubscriptionTier } from "@shared/schema";
 
-const tierOrder: SubscriptionTier[] = ["free", "pro", "elite"];
+const tierOrder: SubscriptionTier[] = ["free", "basic", "pro", "elite", "enterprise"];
 
 const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: string; glow: string }> = {
   free: {
@@ -24,6 +24,12 @@ const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: 
     border: "border-white/[0.06] hover:border-white/[0.10]",
     bg: "bg-white/[0.02]",
     glow: "",
+  },
+  basic: {
+    badge: "text-sky-400 bg-sky-500/10 border-sky-500/20",
+    border: "border-sky-500/20 shadow-lg shadow-sky-500/[0.05]",
+    bg: "bg-sky-500/[0.04]",
+    glow: "shadow-lg shadow-sky-500/[0.08]",
   },
   pro: {
     badge: "text-blue-400 bg-blue-500/10 border-blue-500/20",
@@ -36,6 +42,12 @@ const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: 
     border: "border-purple-500/20 shadow-lg shadow-purple-500/[0.05]",
     bg: "bg-purple-500/[0.04]",
     glow: "shadow-lg shadow-purple-500/[0.08]",
+  },
+  enterprise: {
+    badge: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    border: "border-amber-500/20 shadow-lg shadow-amber-500/[0.05]",
+    bg: "bg-amber-500/[0.04]",
+    glow: "shadow-lg shadow-amber-500/[0.08]",
   },
 };
 
@@ -137,6 +149,7 @@ export default function SubscriptionPage() {
   }
 
   const currentTier = ((user as any).subscriptionTier || "free") as SubscriptionTier;
+  const currentPrice = TIER_PRICES[currentTier];
   const fetchFn = authFetch(token);
 
   const handleSubscriptionAction = (tier: SubscriptionTier) => {
@@ -191,8 +204,8 @@ export default function SubscriptionPage() {
                   {currentTier === "free" ? <Zap className="w-3.5 h-3.5" /> : <Crown className="w-3.5 h-3.5" />}
                   {TIER_LIMITS[currentTier].label}
                 </span>
-                <span className="text-2xl font-bold text-white">{TIER_LIMITS[currentTier].priceLabel}</span>
-                <span className="text-sm text-slate-500">{TIER_LIMITS[currentTier].period}</span>
+                <span className="text-2xl font-bold text-white">{currentPrice.priceLabel}</span>
+                <span className="text-sm text-slate-500">{currentPrice.period}</span>
               </div>
             </div>
             {usage && (
@@ -254,8 +267,8 @@ export default function SubscriptionPage() {
                     <div>
                       <h3 className="text-lg font-semibold text-white">{limits.label}</h3>
                       <div className="flex items-baseline gap-1 mt-2">
-                        <span className="text-3xl font-bold text-white">{limits.priceLabel}</span>
-                        <span className="text-sm text-slate-500">{limits.period}</span>
+                        <span className="text-3xl font-bold text-white">{TIER_PRICES[tier].priceLabel}</span>
+                        <span className="text-sm text-slate-500">{TIER_PRICES[tier].period}</span>
                       </div>
                     </div>
 

@@ -1,4 +1,6 @@
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
 
 /* =========================
    TYPES
@@ -107,6 +109,8 @@ type Inventory = {
   productType: string;
   volumeLitres: number;
   averageCost: number;
+  createdAt?: Date;
+  lastUpdated?: Date;
 };
 
 type Transaction = {
@@ -169,6 +173,35 @@ class Storage {
   priceHistory: PriceHistoryEntry[] = [];
   refineryUpdates: RefineryUpdate[] = [];
   regulationUpdates: RegulationUpdate[] = [];
+
+  private readonly usersFile = path.resolve(
+    process.env.FUELIQ_DATA_DIR || path.join(process.cwd(), "data"),
+    "users.json",
+  );
+
+  constructor() {
+    this.users = this.loadUsers();
+  }
+
+  private loadUsers(): User[] {
+    try {
+      if (!fs.existsSync(this.usersFile)) return [];
+      const parsed = JSON.parse(fs.readFileSync(this.usersFile, "utf8"));
+      if (!Array.isArray(parsed)) return [];
+      return parsed;
+    } catch (error) {
+      console.error("Failed to load persisted users:", error);
+      return [];
+    }
+  }
+
+  private persistUsers() {
+    const directory = path.dirname(this.usersFile);
+    fs.mkdirSync(directory, { recursive: true });
+    const temporaryFile = `${this.usersFile}.tmp`;
+    fs.writeFileSync(temporaryFile, JSON.stringify(this.users, null, 2), "utf8");
+    fs.renameSync(temporaryFile, this.usersFile);
+  }
 
   /* ================= TRADER SIGNALS ================= */
 
@@ -239,6 +272,7 @@ class Storage {
   async createUser(data: Partial<User>) {
     const user: User = { id: randomUUID(), role: "marketer", ...data } as User;
     this.users.push(user);
+    this.persistUsers();
     return user;
   }
 
@@ -258,6 +292,7 @@ class Storage {
     const user = await this.getUser(id);
     if (!user) return null;
     Object.assign(user, data);
+    this.persistUsers();
     return user;
   }
 
@@ -428,7 +463,7 @@ class Storage {
       return {
         ...i,
         terminalName: (terminal && terminal.name) || (i as any).terminalName || null,
-        lastUpdated: (i as any).lastUpdated || i.createdAt || new Date(),
+        lastUpdated: i.lastUpdated || i.createdAt || new Date(),
       } as any;
     });
   }
@@ -439,12 +474,12 @@ class Storage {
 
   async createInventory(data: Partial<Inventory>) {
     const now = new Date();
-    const item: Inventory = { id: randomUUID(), createdAt: now, ...data } as Inventory;
+    const item: Inventory = { id: randomUUID(), lastUpdated: now, ...data } as Inventory;
     const terminal = this.terminals.find(t => t.id === item.terminalId);
     const enriched: any = {
       ...item,
       terminalName: terminal?.name || null,
-      lastUpdated: now,
+      lastUpdated: item.lastUpdated || now,
     };
     this.inventory.push(enriched as Inventory);
     return enriched;

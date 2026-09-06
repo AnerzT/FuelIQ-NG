@@ -182,9 +182,15 @@ export default function Register() {
           </p>
           <p className="text-center text-xs text-muted-foreground/60">
             By creating an account, you agree to our{" "}
-            <Link href="/privacy" className="underline hover:text-muted-foreground transition-colors" data-testid="link-privacy-from-register">
-              Privacy Policy
-            </Link>
+            <div className="flex items-center justify-center gap-3">
+              <Link href="/privacy" className="underline hover:text-muted-foreground transition-colors" data-testid="link-privacy-from-register">
+                Privacy Policy
+              </Link>
+              <span aria-hidden="true">•</span>
+              <Link href="/terms" className="underline hover:text-muted-foreground transition-colors" data-testid="link-terms-from-register">
+                Terms of Use
+              </Link>
+            </div>
           </p>
         </div>
       </div>

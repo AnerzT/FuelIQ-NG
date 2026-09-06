@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --project tsconfig.server.json && vite build",
-    "preview": "vite preview",
-    "start": "node api/index.js",
+    "preview": "npm run build && node dist/server/server/index.js",
+    "start": "node dist/server/server/index.js",
     "build:server": "tsc --project tsconfig.server.json",
     "build:client": "vite build",
     "seed": "tsx server/seed.ts"
@@ -86,8 +86,8 @@
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "@vitejs/plugin-react-swc": "^3.7.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react-swc": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.10",
     "postcss": "^8.4.47",

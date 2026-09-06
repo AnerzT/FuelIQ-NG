@@ -130,9 +130,15 @@ export default function Login() {
           </p>
           <p className="text-center text-xs text-muted-foreground/60">
             By signing in, you agree to our{" "}
-            <Link href="/privacy" className="underline hover:text-muted-foreground transition-colors" data-testid="link-privacy-from-login">
-              Privacy Policy
-            </Link>
+            <div className="flex items-center justify-center gap-3">
+              <Link href="/privacy" className="underline hover:text-muted-foreground transition-colors" data-testid="link-privacy-from-login">
+                Privacy Policy
+              </Link>
+              <span aria-hidden="true">•</span>
+              <Link href="/terms" className="underline hover:text-muted-foreground transition-colors" data-testid="link-terms-from-login">
+                Terms of Use
+              </Link>
+            </div>
           </p>
         </div>
       </div>

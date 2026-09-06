@@ -137,7 +137,13 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#060b18]">
       <section className="relative min-h-screen flex items-center overflow-hidden" data-testid="section-hero">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#060b18] via-[#0a1628] to-[#071020]" />
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/refinery-hero.svg')" }}
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#060b18]/95 via-[#060b18]/75 to-[#060b18]/35" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#060b18] via-[#060b18]/25 to-[#060b18]/60" />
         <div className="absolute inset-0">
           <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-emerald-500/[0.07] rounded-full blur-[120px]" />
           <div className="absolute bottom-[-20%] right-[-10%] w-[700px] h-[700px] bg-blue-500/[0.04] rounded-full blur-[140px]" />
@@ -515,6 +521,9 @@ export default function Landing() {
             <div className="flex items-center gap-4">
               <Link href="/privacy" className="text-sm text-slate-600 hover:text-slate-400 transition-colors" data-testid="link-privacy-footer">
                 Privacy Policy
+              </Link>
+              <Link href="/terms" className="text-sm text-slate-600 hover:text-slate-400 transition-colors" data-testid="link-terms-footer">
+                Terms &amp; Conditions
               </Link>
               <p className="text-sm text-slate-600">
                 &copy; 2026 FuelIQ NG. All rights reserved.

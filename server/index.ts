@@ -1,4 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { registerRoutes } from "./routes.js";
 import { testDatabaseConnection } from "./db.js";
@@ -44,6 +46,21 @@ export async function createApp(): Promise<Express> {
     console.error('❌ Failed to initialize app:', error);
   }
 
+  const clientDist = path.resolve(process.cwd(), "dist/client");
+  app.use(express.static(clientDist));
+
+  app.get("*", (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith("/api/")) {
+      return next();
+    }
+
+    return res.sendFile(path.join(clientDist, "index.html"), (error) => {
+      if (error) {
+        next(error);
+      }
+    });
+  });
+
   app.use((req: Request, res: Response) => {
     res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.path}` });
   });
@@ -68,7 +85,7 @@ export default async function handler(req: Request, res: Response) {
   return cachedApp(req, res);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1])) {
   const PORT = process.env.PORT || 3000;
   createApp().then(app => {
     const httpServer = createServer(app);
