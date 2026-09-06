@@ -23,9 +23,11 @@ export async function getDb() {
   return dbInstance;
 }
 
-export const db = await getDb();
+export const db = process.env.DATABASE_URL ? await getDb() : null;
 
 export async function testDatabaseConnection() {
+  if (!db) return "not configured";
+
   try {
     await db.execute(sql`SELECT 1`);
     return "connected";

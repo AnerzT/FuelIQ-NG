@@ -150,8 +150,8 @@ function ConfidenceGauge({ value, color }: { value: number; color: string }) {
   );
 }
 
-function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-white/[0.04] ${className}`} />;
+function Skeleton({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={`animate-pulse rounded-lg bg-white/[0.04] ${className}`} style={style} />;
 }
 
 function CardSkeleton() {
@@ -320,6 +320,7 @@ export default function Dashboard() {
   const forecast = forecastData?.forecast;
   const terminal = forecastData?.terminal;
   const signal = signalData;
+  const selectedTerminal = terminalList?.find((t) => t.id === selectedTerminalId);
   const terminalInfo = terminal || selectedTerminal;
   const isForecastLoading = forecastLoading || forecastFetching;
 
@@ -336,7 +337,6 @@ export default function Dashboard() {
     day: "numeric",
   });
 
-  const selectedTerminal = terminalList?.find((t) => t.id === selectedTerminalId);
   const isDataLoading = forecastLoading || signalLoading;
   const biasDisplay = forecast ? getBiasDisplay(forecast.bias) : null;
   const userTier = ((user as any).subscriptionTier || "free") as SubscriptionTier;
@@ -383,13 +383,17 @@ export default function Dashboard() {
               {(() => {
                 const tierStyles: Record<SubscriptionTier, string> = {
                   free: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+                  basic: "text-sky-400 bg-sky-500/10 border-sky-500/20",
                   pro: "text-blue-400 bg-blue-500/10 border-blue-500/20",
                   elite: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+                  enterprise: "text-amber-400 bg-amber-500/10 border-amber-500/20",
                 };
                 const tierIcons: Record<SubscriptionTier, typeof Crown> = {
                   free: Zap,
+                  basic: Crown,
                   pro: Crown,
                   elite: Crown,
+                  enterprise: Crown,
                 };
                 const TierIcon = tierIcons[userTier];
                 return (
@@ -508,12 +512,17 @@ export default function Dashboard() {
           <TabsContent value="overview">
             <OverviewTab
               isDataLoading={isDataLoading}
+              isForecastLoading={isForecastLoading}
               signal={signal}
               terminal={terminal}
+              terminalInfo={terminalInfo}
               forecast={forecast}
               biasDisplay={biasDisplay}
               historyLoading={historyLoading}
               chartData={chartData}
+              latestPriceEntry={latestPriceEntry}
+              deltaColor={deltaColor}
+              deltaLabel={deltaLabel}
               selectedTerminal={selectedTerminal}
               refineryStatusData={refineryStatusData}
               regulationData={regulationData}
@@ -604,7 +613,7 @@ function LockedFeature({ feature, tier }: { feature: string; tier: string }) {
   );
 }
 
-function OverviewTab({ isDataLoading, signal, terminal, forecast, biasDisplay, historyLoading, chartData, selectedTerminal, refineryStatusData, regulationData, refineryUpdatesData, traderSignalsData, token, fetchFn }: any) {
+function OverviewTab({ isDataLoading, isForecastLoading, signal, terminal, terminalInfo, forecast, biasDisplay, historyLoading, chartData, latestPriceEntry, deltaColor, deltaLabel, selectedTerminal, refineryStatusData, regulationData, refineryUpdatesData, traderSignalsData, token, fetchFn }: any) {
   if (isDataLoading) {
     return (
       <div className="space-y-5">

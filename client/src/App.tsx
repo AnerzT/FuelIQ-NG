@@ -13,6 +13,7 @@ import Admin from "@/pages/admin";
 import AdminHome from "@/pages/admin-home";
 import SubscriptionPage from "@/pages/subscription";
 import PrivacyPolicy from "@/pages/privacy";
+import TermsOfUse from "@/pages/terms";
 import NotFound from "@/pages/not-found";
 
 function AppRoutes() {
@@ -28,6 +29,7 @@ function AppRoutes() {
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
         <Route path="/privacy" component={PrivacyPolicy} />
+        <Route path="/terms" component={TermsOfUse} />
         <Route path="/">
           {user ? <Dashboard /> : <><Navbar /><Landing /></>}
         </Route>

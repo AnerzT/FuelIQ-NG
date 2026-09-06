@@ -1,6 +1,6 @@
 // client/src/components/AdminLayout.tsx
 import { Link } from "wouter";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "@/lib/auth";
 import { LogOut, LayoutDashboard, Users, MapPin, TrendingUp } from "lucide-react";
 
 interface AdminLayoutProps {

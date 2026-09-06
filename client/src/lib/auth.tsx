@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         const json = await res.json();
-        const userData = json.data?.user || json.user;
+        const userData = json.data?.user || json.data || json.user;
         setUser(userData);
       } else {
         localStorage.removeItem("fueliq_token");

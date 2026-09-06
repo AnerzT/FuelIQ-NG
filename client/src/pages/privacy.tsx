@@ -124,6 +124,11 @@ export default function PrivacyPolicy() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-white/[0.06] text-center">
+          <div className="flex items-center justify-center gap-4 text-sm text-slate-500 mb-3">
+            <Link href="/privacy" className="text-emerald-400">Privacy Policy</Link>
+            <span aria-hidden="true">•</span>
+            <Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link>
+          </div>
           <p className="text-sm text-slate-600">&copy; 2026 FuelIQ NG. All rights reserved.</p>
         </div>
       </div>

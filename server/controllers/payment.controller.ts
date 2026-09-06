@@ -8,13 +8,9 @@ const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const appUrl = process.env.APP_URL || "http://localhost:3000";
 
-if (!stripeSecret) {
-  throw new Error("STRIPE_SECRET_KEY environment variable is required for Stripe checkout");
-}
-
-const stripe = new Stripe(stripeSecret, {
-  apiVersion: "2022-11-15",
-});
+const stripe = stripeSecret
+  ? new Stripe(stripeSecret, { apiVersion: "2022-11-15" })
+  : null;
 
 const TIER_PRICE_MAP: Record<string, { label: string; amount: number; interval: "month" | "year" }> = {
   pro: { label: "Pro", amount: 15000, interval: "month" },
@@ -22,6 +18,10 @@ const TIER_PRICE_MAP: Record<string, { label: string; amount: number; interval: 
 };
 
 export async function createSubscriptionCheckout(req: AuthRequest, res: Response) {
+  if (!stripe) {
+    return res.status(503).json({ success: false, message: "Stripe checkout is not configured" });
+  }
+
   const userId = ensureString(req.userId);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -69,7 +69,7 @@ export async function createSubscriptionCheckout(req: AuthRequest, res: Response
 }
 
 export async function stripeWebhookHandler(req: Request, res: Response) {
-  if (!webhookSecret) {
+  if (!stripe || !webhookSecret) {
     return res.status(500).send("Stripe webhook secret is not configured");
   }
 
@@ -103,5 +103,8 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
       });
     }
   }
+
+  return res.sendStatus(200);
+}
 
  

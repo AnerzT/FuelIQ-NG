@@ -1,0 +1,98 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="800" y1="0" x2="800" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#071321"/>
+      <stop offset="0.6" stop-color="#12334A"/>
+      <stop offset="1" stop-color="#E0794A"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="800" y1="610" x2="800" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#142A35"/>
+      <stop offset="1" stop-color="#050B14"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#B7D2D5"/>
+      <stop offset="0.35" stop-color="#4D7B85"/>
+      <stop offset="1" stop-color="#142D3B"/>
+    </linearGradient>
+    <linearGradient id="tank" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#6B9AA1"/>
+      <stop offset="0.5" stop-color="#294E5D"/>
+      <stop offset="1" stop-color="#102632"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="1180" cy="300" r="170" fill="#FFB66B" opacity="0.18" filter="url(#glow)"/>
+  <circle cx="1180" cy="300" r="90" fill="#FFD18A" opacity="0.7" filter="url(#soft)"/>
+  <path d="M0 570C300 520 420 590 700 550C990 508 1240 530 1600 475V1000H0V570Z" fill="url(#ground)"/>
+
+  <g opacity="0.5" fill="#6BB6B4">
+    <circle cx="490" cy="270" r="13" filter="url(#soft)"/>
+    <circle cx="495" cy="225" r="22" filter="url(#soft)"/>
+    <circle cx="880" cy="180" r="20" filter="url(#soft)"/>
+    <circle cx="886" cy="125" r="34" filter="url(#soft)"/>
+    <circle cx="1080" cy="260" r="15" filter="url(#soft)"/>
+  </g>
+
+  <g stroke="#203E4A" stroke-width="10" opacity="0.85">
+    <path d="M0 670H1600"/>
+    <path d="M0 760H1600"/>
+    <path d="M0 855H1600"/>
+  </g>
+
+  <g stroke="#7FAEB1" stroke-width="7" opacity="0.7">
+    <path d="M120 650V510H250V650M250 560H410V650M410 620V390H485V650"/>
+    <path d="M690 650V420H770V650M770 530H940V650M940 650V335H1020V650"/>
+    <path d="M1230 650V450H1320V650M1320 570H1510V650"/>
+  </g>
+
+  <g>
+    <path d="M150 650V390H220L250 650H150Z" fill="url(#steel)" stroke="#9CC5C6" stroke-width="4"/>
+    <path d="M176 390L185 300H215L224 390" fill="url(#steel)" stroke="#9CC5C6" stroke-width="4"/>
+    <path d="M175 302H225" stroke="#D1E5E1" stroke-width="5"/>
+    <path d="M184 276C160 245 195 215 176 185C230 215 205 245 229 263C243 274 239 294 220 302H190C172 297 170 285 184 276Z" fill="#FFB85F" opacity="0.85" filter="url(#soft)"/>
+  </g>
+
+  <g>
+    <path d="M355 650V350H430V650" fill="url(#steel)" stroke="#A9D0CD" stroke-width="4"/>
+    <path d="M355 420H430M355 490H430M355 560H430" stroke="#B6D7D4" stroke-width="4" opacity="0.65"/>
+    <path d="M383 350V245H404V350M370 246H416" stroke="#B6D7D4" stroke-width="5"/>
+    <path d="M376 230C350 198 386 166 366 132C420 164 395 198 420 216C434 228 427 247 409 254H380C363 248 361 239 376 230Z" fill="#FFB85F" opacity="0.7" filter="url(#soft)"/>
+  </g>
+
+  <g>
+    <ellipse cx="620" cy="595" rx="145" ry="34" fill="#183643"/>
+    <rect x="475" y="485" width="290" height="110" fill="url(#tank)" stroke="#A1C9C9" stroke-width="4"/>
+    <ellipse cx="620" cy="485" rx="145" ry="34" fill="#6B9AA1" stroke="#B5D6D3" stroke-width="4"/>
+    <ellipse cx="620" cy="485" rx="105" ry="21" fill="#234B59"/>
+    <path d="M620 450V380M570 451V410M670 451V402" stroke="#B5D6D3" stroke-width="6"/>
+  </g>
+
+  <g>
+    <path d="M835 650V285H910V650" fill="url(#steel)" stroke="#B4D8D4" stroke-width="5"/>
+    <path d="M850 285L872 205L895 285" fill="url(#steel)" stroke="#B4D8D4" stroke-width="5"/>
+    <path d="M850 350H910M850 430H910M850 510H910M850 590H910" stroke="#B4D8D4" stroke-width="4" opacity="0.6"/>
+    <path d="M868 188C842 154 880 124 860 88C914 120 889 154 914 173C928 185 921 204 903 211H874C856 205 854 197 868 188Z" fill="#FFB85F" opacity="0.75" filter="url(#soft)"/>
+  </g>
+
+  <g>
+    <path d="M1080 650V430H1160V650" fill="url(#steel)" stroke="#B2D8D5" stroke-width="4"/>
+    <path d="M1090 430L1120 350L1150 430" fill="url(#steel)" stroke="#B2D8D5" stroke-width="4"/>
+    <path d="M1050 530H1190M1070 590H1170" stroke="#B2D8D5" stroke-width="4"/>
+  </g>
+
+  <g fill="#F4C56B">
+    <circle cx="140" cy="705" r="5"/><circle cx="230" cy="705" r="5"/><circle cx="350" cy="705" r="5"/>
+    <circle cx="520" cy="705" r="5"/><circle cx="715" cy="705" r="5"/><circle cx="910" cy="705" r="5"/>
+    <circle cx="1110" cy="705" r="5"/><circle cx="1310" cy="705" r="5"/><circle cx="1480" cy="705" r="5"/>
+  </g>
+
+  <path d="M0 900C250 855 430 930 700 890C940 855 1240 900 1600 835V1000H0V900Z" fill="#050B14" opacity="0.75"/>
+  <path d="M0 930C280 880 490 960 760 925C1040 885 1300 935 1600 875" stroke="#2A5960" stroke-width="4" opacity="0.6"/>
+</svg>
