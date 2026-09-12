@@ -26,6 +26,8 @@ type User = {
 type Terminal = {
   id: string;
   name: string;
+  code: string;
+  state: string;
   active: boolean;
 };
 
@@ -178,9 +180,207 @@ class Storage {
     process.env.FUELIQ_DATA_DIR || path.join(process.cwd(), "data"),
     "users.json",
   );
+  private readonly stateFile = path.resolve(
+    process.env.FUELIQ_DATA_DIR || path.join(process.cwd(), "data"),
+    "storage.json",
+  );
 
   constructor() {
     this.users = this.loadUsers();
+    const configuredAdmins = new Set(
+      (process.env.ADMIN_EMAILS || "umar_anasty@ymail.com")
+        .split(",")
+        .map(email => email.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    let adminsUpdated = false;
+    for (const user of this.users) {
+      if (configuredAdmins.has(user.email.trim().toLowerCase()) && user.role !== "admin") {
+        user.role = "admin";
+        adminsUpdated = true;
+      }
+    }
+    if (adminsUpdated) this.persistUsers();
+    this.seedLocalData();
+    this.loadState();
+  }
+
+  private loadState() {
+    try {
+      if (!fs.existsSync(this.stateFile)) return;
+      const state = JSON.parse(fs.readFileSync(this.stateFile, "utf8"));
+      const dateFields: Record<string, string[]> = {
+        depotPrices: ["updatedAt"],
+        forecasts: ["createdAt"],
+        signals: ["createdAt"],
+        inventory: ["createdAt", "lastUpdated"],
+        priceHistory: ["date"],
+        refineryUpdates: ["createdAt"],
+        regulationUpdates: ["effectiveDate", "createdAt"],
+      };
+      for (const key of [
+        "terminals",
+        "depots",
+        "depotPrices",
+        "forecasts",
+        "signals",
+        "inventory",
+        "transactions",
+        "fxRates",
+        "notifications",
+        "traderSignals",
+        "priceHistory",
+        "refineryUpdates",
+        "regulationUpdates",
+      ]) {
+        if (Array.isArray(state[key]) && state[key].length > 0) {
+          const fields = dateFields[key] || [];
+          (this as any)[key] = state[key].map((item: Record<string, unknown>) => {
+            const restored = { ...item };
+            for (const field of fields) {
+              if (typeof restored[field] === "string") {
+                restored[field] = new Date(restored[field] as string);
+              }
+            }
+            return restored;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load persisted application data:", error);
+    }
+  }
+
+  private persistState() {
+    const directory = path.dirname(this.stateFile);
+    fs.mkdirSync(directory, { recursive: true });
+    const state = {
+      terminals: this.terminals,
+      depots: this.depots,
+      depotPrices: this.depotPrices,
+      forecasts: this.forecasts,
+      signals: this.signals,
+      inventory: this.inventory,
+      transactions: this.transactions,
+      fxRates: this.fxRates,
+      notifications: this.notifications,
+      traderSignals: this.traderSignals,
+      priceHistory: this.priceHistory,
+      refineryUpdates: this.refineryUpdates,
+      regulationUpdates: this.regulationUpdates,
+    };
+    const temporaryFile = `${this.stateFile}.tmp`;
+    fs.writeFileSync(temporaryFile, JSON.stringify(state, null, 2), "utf8");
+    fs.renameSync(temporaryFile, this.stateFile);
+  }
+
+  private seedLocalData() {
+    const terminalSeeds = [
+      ["Apapa", "Lagos", "APA"],
+      ["Calabar", "Cross River", "CAL"],
+      ["Port Harcourt", "Rivers", "PHC"],
+      ["Warri", "Delta", "WAR"],
+      ["Onne", "Rivers", "ONN"],
+      ["Bonny", "Rivers", "BON"],
+      ["Atlas Cove", "Lagos", "ATC"],
+      ["Ijegun", "Lagos", "IJG"],
+    ] as const;
+
+    for (const [name, state, code] of terminalSeeds) {
+      const id = `terminal-${code.toLowerCase()}`;
+      this.terminals.push({ id, name, state, code, active: true });
+
+      const signalValues: Record<string, string> = {
+        APA: "High|Weak|Medium|Low",
+        CAL: "Low|Moderate|Low|Low",
+        PHC: "High|Weak|High|Medium",
+        WAR: "Medium|Moderate|Medium|Low",
+        ONN: "Low|Strong|Low|Low",
+        BON: "Low|Moderate|Medium|Low",
+        ATC: "High|Weak|Medium|Medium",
+        IJG: "High|Weak|High|Low",
+      };
+      const [truckQueue, nnpcSupply, fxPressure, policyRisk] =
+        (signalValues[code] || "Medium|Moderate|Medium|Low").split("|");
+      this.signals.push({
+        id: `signal-${code.toLowerCase()}`,
+        terminalId: id,
+        productType: "PMS",
+        vesselActivity: "Moderate",
+        truckQueue,
+        nnpcSupply,
+        fxPressure,
+        policyRisk,
+        createdAt: new Date(),
+      });
+
+      const ranges: Record<string, [number, number, string, number, string]> = {
+        APA: [620, 635, "bullish", 78, "Load before 6am"],
+        CAL: [640, 660, "neutral", 65, "Hold stock"],
+        PHC: [615, 630, "bullish", 72, "Buy early"],
+        WAR: [625, 645, "neutral", 60, "Steady pricing"],
+        ONN: [600, 615, "bearish", 80, "Delay purchases"],
+        BON: [610, 625, "neutral", 70, "Off-peak loading"],
+        ATC: [618, 632, "bullish", 74, "Pre-load"],
+        IJG: [625, 640, "bullish", 76, "Load early"],
+      };
+      const [expectedMin, expectedMax, bias, confidence, suggestedAction] = ranges[code];
+      this.forecasts.push({
+        id: `forecast-${code.toLowerCase()}`,
+        terminalId: id,
+        productType: "PMS",
+        expectedMin,
+        expectedMax,
+        bias,
+        confidence,
+        suggestedAction,
+        createdAt: new Date(),
+      });
+
+      for (let daysAgo = 30; daysAgo >= 0; daysAgo -= 1) {
+        const date = new Date();
+        date.setDate(date.getDate() - daysAgo);
+        this.priceHistory.push({
+          id: randomUUID(),
+          terminalId: id,
+          productType: "PMS",
+          date,
+          price: expectedMin + ((daysAgo * 7 + code.length) % 20),
+        });
+      }
+    }
+
+    this.refineryUpdates.push(
+      {
+        id: "refinery-dangote",
+        refineryName: "Dangote Refinery",
+        productionCapacity: 650000,
+        operationalStatus: "operational",
+        pmsOutputEstimate: 180000,
+        dieselOutputEstimate: 120000,
+        jetOutputEstimate: 50000,
+        createdAt: new Date(),
+      },
+      {
+        id: "refinery-port-harcourt",
+        refineryName: "Port Harcourt Refinery",
+        productionCapacity: 60000,
+        operationalStatus: "maintenance",
+        pmsOutputEstimate: 12000,
+        dieselOutputEstimate: 9000,
+        jetOutputEstimate: 3000,
+        createdAt: new Date(),
+      },
+    );
+    this.regulationUpdates.push({
+      id: "regulation-fuel-pricing",
+      title: "Fuel pricing review",
+      summary: "Market participants should monitor supply and foreign exchange conditions.",
+      impactLevel: "medium",
+      effectiveDate: new Date(),
+      source: "FuelIQ market desk",
+      createdAt: new Date(),
+    });
   }
 
   private loadUsers(): User[] {
@@ -218,6 +418,7 @@ class Storage {
     } as TraderSignal;
 
     this.traderSignals.unshift(signal);
+    this.persistState();
     return signal;
   }
 
@@ -270,7 +471,14 @@ class Storage {
   /* ================= USERS ================= */
 
   async createUser(data: Partial<User>) {
-    const user: User = { id: randomUUID(), role: "marketer", ...data } as User;
+    const user: User = {
+      id: randomUUID(),
+      role: "marketer",
+      subscriptionTier: "free",
+      forecastsUsedToday: 0,
+      smsAlertsUsedThisWeek: 0,
+      ...data,
+    } as User;
     this.users.push(user);
     this.persistUsers();
     return user;
@@ -281,7 +489,8 @@ class Storage {
   }
 
   async getUserByEmail(email: string) {
-    return this.users.find(u => u.email === email);
+    const normalizedEmail = email.trim().toLowerCase();
+    return this.users.find(u => u.email.trim().toLowerCase() === normalizedEmail);
   }
 
   async getAllUsers() {
@@ -304,6 +513,7 @@ class Storage {
     const user = await this.getUser(userId);
     if (!user) return null;
     user.forecastsUsedToday = (user.forecastsUsedToday ?? 0) + 1;
+    this.persistUsers();
     return user;
   }
 
@@ -321,6 +531,7 @@ class Storage {
     const t = await this.getTerminal(id);
     if (!t) return null;
     Object.assign(t, data);
+    this.persistState();
     return t;
   }
 
@@ -344,7 +555,7 @@ class Storage {
 
   /* ================= DEPOT PRICES ================= */
 
-  async getDepotPrices(depotId?: string, productType?: string) {
+  async getDepotPrices(depotId?: string, productType?: string, liveMarketPrice?: number) {
     const filtered = this.depotPrices.filter(p =>
       (!depotId || p.depotId === depotId) &&
       (!productType || p.productType === productType)
@@ -365,7 +576,7 @@ class Storage {
 
     // Fallback sample prices when storage is empty
     const now = new Date();
-    const basePrice = productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620;
+    const basePrice = liveMarketPrice ?? (productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620);
     const sourceTerminals = this.terminals.length > 0 ? this.terminals : [{ id: "SAMPLE_T1", name: "Sample Terminal" }];
 
     const fallback = sourceTerminals.slice(0, 6).map((t, i) => ({
@@ -375,8 +586,8 @@ class Storage {
       terminalId: t.id,
       terminalName: t.name,
       productType: productType || "PMS",
-      price: basePrice + Math.floor(Math.random() * 30),
-      updatedAt: new Date(now.getTime() - i * 1000 * 60),
+      price: Math.round(basePrice + ((i * 7 + Math.sin(Date.now() / 600000 + i) * 4) % 30)),
+      updatedAt: now,
     }));
 
     return fallback;
@@ -389,6 +600,7 @@ class Storage {
       ...data,
     } as DepotPrice;
     this.depotPrices.unshift(price);
+    this.persistState();
     return price;
   }
 
@@ -397,6 +609,7 @@ class Storage {
     if (!p) return null;
     p.price = price;
     p.updatedAt = new Date();
+    this.persistState();
     return p;
   }
 
@@ -409,6 +622,7 @@ class Storage {
       ...data,
     } as Forecast;
     this.forecasts.unshift(forecast);
+    this.persistState();
     return forecast;
   }
 
@@ -437,6 +651,7 @@ class Storage {
       ...data,
     } as Signal;
     this.signals.unshift(signal);
+    this.persistState();
     return signal;
   }
 
@@ -482,6 +697,7 @@ class Storage {
       lastUpdated: item.lastUpdated || now,
     };
     this.inventory.push(enriched as Inventory);
+    this.persistState();
     return enriched;
   }
 
@@ -492,12 +708,14 @@ class Storage {
     (item as any).lastUpdated = new Date();
     const terminal = this.terminals.find(t => t.id === item.terminalId);
     (item as any).terminalName = terminal?.name || (item as any).terminalName || null;
+    this.persistState();
     return item;
   }
 
   async createTransaction(data: Partial<Transaction>) {
     const tx: Transaction = { id: randomUUID(), ...data } as Transaction;
     this.transactions.push(tx);
+    this.persistState();
     return tx;
   }
 
@@ -650,6 +868,24 @@ class Storage {
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
     if (allHistory.length > 0) {
+      const latest = allHistory[allHistory.length - 1];
+      const productBase = productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620;
+      const terminalOffset = terminalId.split("").reduce((total, character) => total + character.charCodeAt(0), 0) % 18;
+      const liveMovement = Math.round(Math.sin(Date.now() / 600000) * 8);
+      const livePrice = Math.max(300, productBase + terminalOffset + liveMovement);
+      const now = new Date();
+      if (latest.date.getTime() < now.getTime() - 60_000 || latest.price !== livePrice) {
+        const currentEntry = {
+          id: randomUUID(),
+          terminalId,
+          productType,
+          date: now,
+          price: livePrice,
+        };
+        this.priceHistory.push(currentEntry);
+        this.persistState();
+        allHistory.push(currentEntry);
+      }
       return allHistory.slice(-days);
     }
 

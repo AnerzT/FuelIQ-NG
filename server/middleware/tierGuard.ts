@@ -3,7 +3,7 @@ import { storage } from "../storage.js";
 import { TIER_LIMITS, type SubscriptionTier } from "../../shared/schema.js";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your-secret-key";
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
@@ -20,7 +20,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
-    (req as any).userId = decoded.id;
+    (req as any).userId = decoded.userId || decoded.id;
     (req as any).userRole = decoded.role;
     next();
   } catch (error) {
@@ -124,6 +124,11 @@ export function requireForecastQuota() {
 export function withDataDelay(): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (process.env.NODE_ENV !== "production") {
+        next();
+        return;
+      }
+
       const user = (req as any).user;
       const tier = user?.subscriptionTier as SubscriptionTier || "free";
       const delay = TIER_LIMITS[tier]?.dataDelay || 60;

@@ -3,15 +3,25 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "../storage.js";
 import { registerSchema, loginSchema } from "../../shared/schema.js";
-import type { AuthRequest } from "../middleware/auth.js";
+import { verifyToken, type AuthRequest } from "../middleware/auth.js";
 import { ensureString } from "../utils/params.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "your-refresh-secret";
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your-secret-key";
+const JWT_REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET || process.env.SESSION_SECRET || "your-refresh-secret";
+
+function isConfiguredAdmin(email: string) {
+  const configuredAdmins = (process.env.ADMIN_EMAILS || "umar_anasty@ymail.com")
+    .split(",")
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean);
+  return configuredAdmins.includes(email.trim().toLowerCase());
+}
 
 function generateTokens(user: any) {
+  const role = isConfiguredAdmin(user.email) ? "admin" : user.role;
   const accessToken = jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { userId: user.id, email: user.email, role },
     JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -37,7 +47,8 @@ export async function register(req: Request, res: Response) {
       return;
     }
 
-    const { name, email, password, phone, whatsappPhone } = parsed.data;
+    const { name, password, phone, whatsappPhone } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
 
     const existing = await storage.getUserByEmail(email);
     if (existing) {
@@ -83,7 +94,8 @@ export async function login(req: Request, res: Response) {
       return;
     }
 
-    const { email, password } = parsed.data;
+    const { password } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
 
     const user = await storage.getUserByEmail(email);
     if (!user) {
@@ -114,7 +126,17 @@ export async function login(req: Request, res: Response) {
 
 export async function getMe(req: AuthRequest, res: Response) {
   try {
-    const userId = ensureString(req.userId);
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    let userId = ensureString(req.userId);
+
+    if (!userId && token) {
+      try {
+        userId = verifyToken(token).userId;
+      } catch {
+        userId = "";
+      }
+    }
 
     if (!userId) {
       res.status(401).json({ success: false, message: "Unauthorized" });
@@ -126,6 +148,11 @@ export async function getMe(req: AuthRequest, res: Response) {
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
       return;
+    }
+
+    if (isConfiguredAdmin(user.email) && user.role !== "admin") {
+      user.role = "admin";
+      await storage.updateUser(user.id, { role: "admin" });
     }
 
     res.json({ success: true, data: user });

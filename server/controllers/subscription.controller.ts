@@ -51,9 +51,9 @@ export async function updateSubscription(req: AuthRequest, res: Response) {
     const userId = ensureString(req.userId);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const { subscriptionTier, assignedTerminalId } = req.body;
+    const { subscriptionTier, tier, assignedTerminalId } = req.body;
     const updateData: any = {};
-    if (subscriptionTier) updateData.subscriptionTier = subscriptionTier;
+    if (subscriptionTier || tier) updateData.subscriptionTier = subscriptionTier || tier;
     if (assignedTerminalId) updateData.assignedTerminalId = assignedTerminalId;
 
     const updatedUser = await storage.updateUser(userId, updateData);

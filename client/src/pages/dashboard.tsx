@@ -213,7 +213,7 @@ interface ForecastResponse {
 interface SignalResponse extends MarketSignal {}
 
 export default function Dashboard() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>("");
   const [selectedProduct, setSelectedProduct] = useState<string>("PMS");
@@ -245,15 +245,19 @@ export default function Dashboard() {
   });
 
   const { data: priceHistoryData, isLoading: historyLoading, refetch: refetchHistory } = useQuery<PriceHistoryEntry[]>({
-    queryKey: ["/api/terminals", selectedTerminalId, "price-history"],
+    queryKey: ["/api/terminals", selectedTerminalId, "price-history", selectedProduct],
     queryFn: fetchFn,
     enabled: !!selectedTerminalId && !!token,
+    staleTime: 0,
+    refetchInterval: 60_000,
   });
 
-  const { data: depotPricesData } = useQuery<any>({
+  const { data: depotPricesData, refetch: refetchDepotPrices, isFetching: depotPricesFetching } = useQuery<any>({
     queryKey: ["/api/depot-prices"],
     queryFn: fetchFn,
     enabled: !!token && (activeTab === "depot-spread" || activeTab === "overview"),
+    staleTime: 0,
+    refetchInterval: 60_000,
   });
 
   const { data: inventoryData, refetch: refetchInventory } = useQuery<any>({
@@ -302,7 +306,12 @@ export default function Dashboard() {
     refetchForecast();
     refetchSignals();
     refetchHistory();
+    refetchDepotPrices();
   };
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-[#060b18]" data-testid="auth-loading" />;
+  }
 
   if (!user) {
     setLocation("/login");
@@ -469,10 +478,10 @@ export default function Dashboard() {
               variant="ghost"
               size="sm"
               onClick={refreshAll}
-              className={`text-slate-400 hover:text-white hover:bg-white/[0.04] ${forecastFetching ? "animate-spin-slow" : ""}`}
+              className={`text-slate-400 hover:text-white hover:bg-white/[0.04] ${forecastFetching || depotPricesFetching ? "animate-spin-slow" : ""}`}
               data-testid="button-refresh"
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${forecastFetching ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 mr-2 ${forecastFetching || depotPricesFetching ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
