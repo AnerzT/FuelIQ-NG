@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem("fueliq_token", tokenValue);
     setToken(tokenValue);
-    setUser(authData.user);
+    await fetchUser(tokenValue);
   };
 
   const register = async (regData: { name: string; email: string; password: string }) => {
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem("fueliq_token", tokenValue);
     setToken(tokenValue);
-    setUser(authData.user);
+    await fetchUser(tokenValue);
   };
 
   const logout = () => {

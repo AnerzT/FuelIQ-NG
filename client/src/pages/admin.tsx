@@ -58,7 +58,7 @@ function getBiasIcon(bias: string) {
 }
 
 export default function Admin() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AdminTab>("terminals");
@@ -78,6 +78,37 @@ export default function Admin() {
     queryFn: fetchFn,
     enabled: !!token,
   });
+  const { data: health } = useQuery<{ status: string; timestamp?: string }>({
+    queryKey: ["/api/health"],
+    queryFn: async () => {
+      const response = await fetch("/api/health");
+      if (!response.ok) throw new Error("Health check failed");
+      return response.json();
+    },
+    refetchInterval: 30_000,
+  });
+  const syncMutation = useMutation({
+    mutationFn: async (path: string) => {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.message || "Market sync failed");
+      }
+      return payload;
+    },
+    onSuccess: (payload) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/forecasts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/forecast"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
+      toast({ title: payload.message || "Market data synchronized" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
 
   const totalTerminals = terminals?.length ?? 0;
   const activeTerminals = terminals?.filter((t) => t.active).length ?? 0;
@@ -92,6 +123,10 @@ export default function Admin() {
   const freeUsers = subs?.filter((s) => s.tier === "free").length ?? 0;
   const proUsers = subs?.filter((s) => s.tier === "pro").length ?? 0;
   const eliteUsers = subs?.filter((s) => s.tier === "elite").length ?? 0;
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-[#060b18]" data-testid="auth-loading" />;
+  }
 
   if (!user) {
     setLocation("/login");
@@ -140,6 +175,17 @@ export default function Admin() {
                 </div>
                 <span className="text-sm font-medium text-slate-300 hidden sm:block" data-testid="text-admin-name">{user.name}</span>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => syncMutation.mutate("/api/admin/sync/nnpc-recalculate")}
+                disabled={syncMutation.isPending}
+                className="border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                data-testid="button-sync-market-data"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+                <span className="hidden md:inline">Sync Market</span>
+              </Button>
               <Button variant="ghost" size="icon" onClick={logout} className="text-slate-400 hover:text-white hover:bg-white/[0.04]" data-testid="button-admin-logout">
                 <LogOut className="w-4 h-4" />
               </Button>
@@ -164,6 +210,14 @@ export default function Admin() {
               <div>
                 <p className="text-3xl font-bold text-white">{totalTerminals}</p>
                 <p className="text-sm text-slate-500">Total terminals</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                <div className="text-xs uppercase tracking-wider text-slate-500">System health</div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${health?.status === "ok" ? "bg-emerald-400" : "bg-red-400"}`} />
+                  <span className="text-2xl font-bold text-white">{health?.status === "ok" ? "Online" : "Checking"}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-500">API monitored every 30 seconds</p>
               </div>
               <div className="text-right text-sm text-slate-400">
                 <div>Active {activeTerminals}</div>

@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key" || process.env.SESSION_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your-secret-key";
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET or SESSION_SECRET environment variable is required");
 }
@@ -19,7 +19,12 @@ export function generateToken(userId: string): string {
 }
 
 export function verifyToken(token: string): { userId: string } {
-  return jwt.verify(token, JWT_SECRET) as { userId: string };
+  const payload = jwt.verify(token, JWT_SECRET) as { userId?: string; id?: string };
+  const userId = payload.userId || payload.id;
+  if (!userId) {
+    throw new Error("Token does not contain a user id");
+  }
+  return { userId };
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {

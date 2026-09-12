@@ -20,7 +20,7 @@ interface SubUser {
 }
 
 export default function AdminHome() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const fetchFn = authFetch(token);
 
@@ -41,6 +41,10 @@ export default function AdminHome() {
     queryFn: fetchFn,
     enabled: !!token,
   });
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-[#060b18]" data-testid="auth-loading" />;
+  }
 
   if (!user) {
     setLocation("/login");

@@ -7,7 +7,7 @@ export default defineConfig({
   root: path.resolve(process.cwd(), "client"),
   server: {
     proxy: {
-      '/api': 'http://127.0.0.1:4000',
+      '/api': process.env.API_URL || 'http://127.0.0.1:3000',
     },
   },
   build: {

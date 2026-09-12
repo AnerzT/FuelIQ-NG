@@ -10,6 +10,7 @@ export async function getPriceHistory(req: AuthRequest, res: Response) {
     const productType = ensureString(req.query.productType, "PMS");
 
     const history = await storage.getPriceHistory(terminalId, days, productType);
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     return res.json({ success: true, data: history });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
