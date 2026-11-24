@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { authFetch } from "@/lib/api";
+import { MarketIntelligence } from "@/components/market-intelligence";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -245,7 +246,7 @@ export default function Dashboard() {
   });
 
   const { data: priceHistoryData, isLoading: historyLoading, refetch: refetchHistory } = useQuery<PriceHistoryEntry[]>({
-    queryKey: ["/api/terminals", selectedTerminalId, "price-history", selectedProduct],
+    queryKey: ["/api/terminals", selectedTerminalId, `price-history?productType=${encodeURIComponent(selectedProduct)}`],
     queryFn: fetchFn,
     enabled: !!selectedTerminalId && !!token,
     staleTime: 0,
@@ -492,6 +493,9 @@ export default function Dashboard() {
             <TabsTrigger value="overview" className="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-slate-400 text-xs" data-testid="tab-overview">
               <BarChart3 className="w-3.5 h-3.5 mr-1.5" />Overview
             </TabsTrigger>
+            <TabsTrigger value="market-intelligence" className="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-slate-400 text-xs" data-testid="tab-market-intelligence">
+              <Activity className="w-3.5 h-3.5 mr-1.5" />Market Intelligence
+            </TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-slate-400 text-xs" data-testid="tab-products">
               <Fuel className="w-3.5 h-3.5 mr-1.5" />Products
             </TabsTrigger>
@@ -540,6 +544,10 @@ export default function Dashboard() {
               token={token}
               fetchFn={fetchFn}
             />
+          </TabsContent>
+
+          <TabsContent value="market-intelligence">
+            <MarketIntelligence token={token} tier={userTier} userId={user.id} />
           </TabsContent>
 
           <TabsContent value="products">
@@ -1049,6 +1057,9 @@ function DepotSpreadTab({ data }: { data: any }) {
           </SelectContent>
         </Select>
       </div>
+      <p className="text-xs text-slate-500">
+        Prices refresh automatically from configured NNPCL feeds and authorized WhatsApp reports. Sample data is labeled.
+      </p>
 
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4" data-testid="stat-lowest-price">
@@ -1072,8 +1083,10 @@ function DepotSpreadTab({ data }: { data: any }) {
             <tr className="border-b border-white/[0.06]">
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Depot</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Terminal</th>
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Product</th>
               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Price</th>
               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">vs Lowest</th>
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Source / Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -1084,6 +1097,7 @@ function DepotSpreadTab({ data }: { data: any }) {
                 <tr key={p.id || i} className={`border-b border-white/[0.04] hover:bg-white/[0.02] ${isLowest ? "bg-emerald-500/[0.03]" : ""}`} data-testid={`row-depot-${i}`}>
                   <td className="px-5 py-3 text-sm text-white font-medium">{p.depotName || "—"}</td>
                   <td className="px-5 py-3 text-sm text-slate-400">{p.terminalName || "—"}</td>
+                  <td className="px-5 py-3 text-sm text-slate-400">{p.productType}</td>
                   <td className={`px-5 py-3 text-sm font-mono text-right font-semibold ${isLowest ? "text-emerald-400" : "text-white"}`}>
                     ₦{p.price?.toLocaleString()}
                   </td>
@@ -1094,10 +1108,22 @@ function DepotSpreadTab({ data }: { data: any }) {
                       <span className="text-red-400 text-xs">+₦{diff.toLocaleString()}</span>
                     )}
                   </td>
+                  <td className="px-5 py-3 text-xs text-slate-400">
+                    <span className={p.source === "sample" ? "text-amber-400" : "text-emerald-400"}>
+                      {p.source || "unknown"}
+                    </span>
+                    <div className="mt-1 text-slate-600">
+                      {p.updatedAt ? new Date(p.updatedAt).toLocaleString("en-NG", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                    </div>
+                    {p.source !== "sample" && p.updatedAt &&
+                      Date.now() - new Date(p.updatedAt).getTime() > 24 * 60 * 60 * 1000 && (
+                        <div className="mt-1 text-amber-400">Older than 24 hours</div>
+                      )}
+                  </td>
                 </tr>
               );
             }) : (
-              <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-600">No depot prices available</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-600">No depot prices available</td></tr>
             )}
           </tbody>
         </table>

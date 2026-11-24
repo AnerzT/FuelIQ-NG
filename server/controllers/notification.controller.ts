@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
+import { ADMIN_EMAIL } from "../../shared/admin.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { sendSms } from "../services/smsService.js";
 import { sendWhatsAppMessage } from "../services/whatsappService.js";
@@ -107,7 +108,11 @@ export async function triggerMorningDigest(req: AuthRequest, res: Response) {
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
     const user = await storage.getUser(userId);
-    if (!user || user.role !== "admin") return res.status(403).json({ success: false, message: "Admin access required" });
+    if (
+      !user ||
+      user.role !== "admin" ||
+      user.email.trim().toLowerCase() !== ADMIN_EMAIL
+    ) return res.status(403).json({ success: false, message: "Admin access required" });
 
     const subscribedUsers = await storage.getSubscribedUsers();
     const results = { total: subscribedUsers.length, sms: 0, whatsapp: 0, failed: 0 };

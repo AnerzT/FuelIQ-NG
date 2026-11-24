@@ -6,6 +6,8 @@ import { getTerminals } from "./controllers/terminal.controller.js";
 import { getForecast, getMultiProductForecasts, createForecast, generateForecast, scoreForecast, getForecastHistory } from "./controllers/forecast.controller.js";
 import { getSignals, createSignal } from "./controllers/signal.controller.js";
 import { getPriceHistory } from "./controllers/price-history.controller.js";
+import { ingestWhatsAppPrice } from "./controllers/whatsapp-price.controller.js";
+import { getMarketIntelligence } from "./controllers/market-intelligence.controller.js";
 import {
   adminGetTerminals,
   adminToggleTerminal,
@@ -24,6 +26,7 @@ import {
   triggerFxSignalUpdate,
   getMarketOverview,
   getFxHistory,
+  getNnpcStatus,
 } from "./controllers/integrations.controller.js";
 import {
   getNotificationPrefs,
@@ -41,7 +44,12 @@ import {
   adminUpdateSubscription,
 } from "./controllers/subscription.controller.js";
 import {
+  getSubscriptionPaymentOptions,
   createSubscriptionCheckout,
+  createBankTransferPaymentRequest,
+  getUserBankTransferRequests,
+  adminGetBankTransferRequests,
+  adminReviewBankTransferRequest,
   stripeWebhookHandler,
 } from "./controllers/payment.controller.js";
 import {
@@ -89,6 +97,7 @@ export async function registerRoutes(
 
   const withTier = [requireAuth, attachUserRole(storage)];
 
+  app.post("/api/webhooks/whatsapp/prices", ingestWhatsAppPrice);
   app.post("/api/auth/register", register);
   app.post("/api/auth/login", login);
   app.get("/api/auth/me", requireAuth, getMe);
@@ -117,12 +126,14 @@ export async function registerRoutes(
 
   app.get("/api/fx/history", ...withTier, withDataDelay(), getFxHistory);
   app.get("/api/market/overview", ...withTier, withDataDelay(), getMarketOverview);
+  app.get("/api/market-intelligence", ...withTier, getMarketIntelligence);
   app.get("/api/market/nnpc", ...withTier, withDataDelay(), getNnpcPrice);
   app.get("/api/market/fx", ...withTier, withDataDelay(), getFxRate);
   app.get("/api/market/vessels", ...withTier, withDataDelay(), getVesselTracking);
 
   app.post("/api/admin/sync/nnpc", ...adminMiddleware, triggerNnpcSync);
   app.post("/api/admin/sync/nnpc-recalculate", ...adminMiddleware, triggerNnpcSyncAndRecalculate);
+  app.get("/api/admin/sync/nnpc/status", ...adminMiddleware, getNnpcStatus);
   app.post("/api/admin/sync/vessels", ...adminMiddleware, triggerVesselSignalUpdate);
   app.post("/api/admin/sync/fx", ...adminMiddleware, triggerFxSync);
   app.post("/api/admin/sync/fx-signals", ...adminMiddleware, triggerFxSignalUpdate);
@@ -137,12 +148,17 @@ export async function registerRoutes(
 
   app.get("/api/subscription", ...withTier, getSubscriptionInfo);
   app.get("/api/subscription/tiers", getTierInfo);
+  app.get("/api/subscription/payment-options", requireAuth, getSubscriptionPaymentOptions);
   app.patch("/api/subscription", ...withTier, updateSubscription);
   app.post("/api/subscription/checkout", ...withTier, createSubscriptionCheckout);
+  app.get("/api/subscription/payment-requests", requireAuth, getUserBankTransferRequests);
+  app.post("/api/subscription/payment-requests", ...withTier, createBankTransferPaymentRequest);
   app.post("/api/payment/webhook", stripeWebhookHandler);
 
   app.get("/api/admin/subscriptions", ...adminMiddleware, adminGetAllSubscriptions);
   app.patch("/api/admin/subscriptions/:userId", ...adminMiddleware, adminUpdateSubscription);
+  app.get("/api/admin/subscription-payment-requests", ...adminMiddleware, adminGetBankTransferRequests);
+  app.patch("/api/admin/subscription-payment-requests/:id", ...adminMiddleware, adminReviewBankTransferRequest);
 
   app.get("/api/depots", ...withTier, requireTier("pro"), getDepots);
   app.get("/api/depots/:id", ...withTier, requireTier("pro"), getDepot);

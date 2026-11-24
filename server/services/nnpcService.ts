@@ -4,7 +4,13 @@ import { computeForecastScore } from "./forecastScoring.js";
 // Configuration
 const NNPC_API_URL = process.env.NNPCL_API_URL || "https://api.nnpcgroup.com/v1";
 const NNPC_API_KEY = process.env.NNPCL_API_KEY;
-const SYNC_INTERVAL = parseInt(process.env.NNPC_SYNC_INTERVAL || "3600000");
+const parsedSyncInterval = Number.parseInt(process.env.NNPC_SYNC_INTERVAL || "300000", 10);
+const SYNC_INTERVAL = Number.isFinite(parsedSyncInterval) && parsedSyncInterval >= 60_000
+  ? parsedSyncInterval
+  : 300_000;
+const USING_MOCK_NNPC = process.env.USE_MOCK_NNPC === "true";
+const AUTO_SYNC_ENABLED = process.env.AUTO_SYNC_NNPC === "true" ||
+  (Boolean(NNPC_API_KEY) && process.env.AUTO_SYNC_NNPC !== "false");
 
 interface NNPCPricesResponse {
   status: string;
@@ -33,11 +39,33 @@ const MOCK_NNPC_PRICES = {
   LPG: { price: 1100, location: "Port Harcourt", effectiveDate: new Date().toISOString() },
 };
 
+const PRODUCT_ALIASES: Record<string, string> = {
+  PMS: "PMS",
+  PETROL: "PMS",
+  GASOLINE: "PMS",
+  AGO: "AGO",
+  DIESEL: "AGO",
+  DPK: "DPK",
+  KEROSENE: "DPK",
+  LPG: "LPG",
+  "JET A1": "JET_A1",
+  "JET-A1": "JET_A1",
+  JET_A1: "JET_A1",
+};
+
+function normalizeProductType(value: string) {
+  return PRODUCT_ALIASES[value.trim().toUpperCase()] || null;
+}
+
+let lastSync: Date | null = null;
+let lastAttempt: Date | null = null;
+let lastSyncError: string | null = null;
+let isSyncRunning = false;
+
 async function fetchNNPCPrices(): Promise<NNPCPricesResponse | null> {
-  if (!NNPC_API_KEY || process.env.USE_MOCK_NNPC === "true") {
+  if (process.env.USE_MOCK_NNPC === "true") {
     console.log("🔧 Using mock NNPC data");
-    // Fix TS2739: explicitly return a fully-typed NNPCPricesResponse, not {}
-    const response: NNPCPricesResponse = {
+    return {
       status: "success",
       data: {
         products: Object.entries(MOCK_NNPC_PRICES).map(([name, data]) => ({
@@ -49,8 +77,8 @@ async function fetchNNPCPrices(): Promise<NNPCPricesResponse | null> {
         })),
       },
     };
-    return response;
   }
+  if (!NNPC_API_KEY) return null;
 
   try {
     console.log("📡 Fetching NNPC prices from API...");
@@ -59,11 +87,34 @@ async function fetchNNPCPrices(): Promise<NNPCPricesResponse | null> {
         "Authorization": `Bearer ${NNPC_API_KEY}`,
         "Content-Type": "application/json",
       },
+      signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error(`NNPC API returned ${response.status}`);
-    const data = await response.json();
+    const payload = await response.json() as any;
+    if (payload?.status !== "success" || !Array.isArray(payload?.data?.products)) {
+      throw new Error("NNPC API returned an invalid price response");
+    }
+    const products = payload.data.products.flatMap((product: any) => {
+      const name = typeof product.name === "string" ? product.name : "";
+      const location = typeof product.location === "string" ? product.location.trim() : "";
+      const productType = normalizeProductType(name);
+      const price = Number(product.price);
+      const currency = typeof product.currency === "string" ? product.currency.toUpperCase() : "NGN";
+      if (!productType || !location || currency !== "NGN" || !Number.isFinite(price) || price <= 0) {
+        return [];
+      }
+      const parsedDate = new Date(product.effectiveDate);
+      return [{
+        name: productType,
+        location,
+        price,
+        currency,
+        effectiveDate: Number.isFinite(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString(),
+      }];
+    });
+    if (products.length === 0) throw new Error("NNPC API did not return valid NGN product prices");
     console.log("✅ Successfully fetched NNPC prices");
-    return data as NNPCPricesResponse;
+    return { status: "success", data: { products } };
   } catch (error) {
     console.error("❌ Failed to fetch NNPC prices:", error);
     return null;
@@ -167,23 +218,59 @@ export async function syncNNPCData(): Promise<NNPCUpdateResult> {
     errors: [],
     timestamp: new Date(),
   };
+  if (isSyncRunning) {
+    result.errors.push("NNPC sync is already running");
+    return result;
+  }
+  isSyncRunning = true;
+  lastAttempt = new Date();
   try {
     console.log("🔄 Starting NNPC data sync...");
     const nnpcData = await fetchNNPCPrices();
     if (!nnpcData || nnpcData.status !== "success") {
       throw new Error("Failed to fetch NNPC data");
     }
-    result.productsUpdated = nnpcData.data.products.length;
-    await updateSignalsFromNNPC(nnpcData);
-    await generateForecastsFromNNPC(nnpcData);
+    let productsProcessed = 0;
+    let pricesChanged = 0;
+    for (const product of nnpcData.data.products) {
+      try {
+        const observation = await storage.recordPriceObservation({
+          location: product.location,
+          productType: normalizeProductType(product.name) || product.name,
+          price: product.price,
+          source: USING_MOCK_NNPC ? "mock" : "NNPC API",
+          observedAt: new Date(product.effectiveDate),
+          deduplicateUnchangedPrice: true,
+        });
+        if (observation) {
+          productsProcessed++;
+          if (observation.created) result.productsUpdated++;
+          if (observation.priceChanged) pricesChanged++;
+        }
+      } catch (error) {
+        result.errors.push(error instanceof Error ? error.message : "Could not store NNPC price");
+      }
+    }
+    if (productsProcessed === 0) {
+      throw new Error(result.errors.join("; ") || "No NNPC price matched a configured location");
+    }
+    if (pricesChanged > 0) {
+      await updateSignalsFromNNPC(nnpcData);
+      await generateForecastsFromNNPC(nnpcData);
+    }
     result.success = true;
+    lastSync = new Date();
+    lastSyncError = result.errors.length > 0 ? result.errors.join("; ") : null;
     console.log(`✅ NNPC sync completed. Updated ${result.productsUpdated} products.`);
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     result.errors.push(errorMessage);
+    lastSyncError = errorMessage;
     console.error("❌ NNPC sync failed:", errorMessage);
     return result;
+  } finally {
+    isSyncRunning = false;
   }
 }
 
@@ -195,7 +282,10 @@ export async function getNNPCPrice(productType: string = "PMS"): Promise<{
   try {
     const nnpcData = await fetchNNPCPrices();
     if (nnpcData?.data.products) {
-      const product = nnpcData.data.products.find(p => p.name.toUpperCase() === productType.toUpperCase());
+      const normalizedProductType = normalizeProductType(productType);
+      const product = nnpcData.data.products.find(
+        p => normalizeProductType(p.name) === normalizedProductType,
+      );
       if (product) {
         return {
           price: product.price,
@@ -203,14 +293,6 @@ export async function getNNPCPrice(productType: string = "PMS"): Promise<{
           effectiveDate: new Date(product.effectiveDate),
         };
       }
-    }
-    const mockData = MOCK_NNPC_PRICES[productType as keyof typeof MOCK_NNPC_PRICES];
-    if (mockData) {
-      return {
-        price: mockData.price,
-        location: mockData.location,
-        effectiveDate: new Date(mockData.effectiveDate),
-      };
     }
     return null;
   } catch (error) {
@@ -249,21 +331,30 @@ export async function isNNPCAvailable(): Promise<boolean> {
 
 export function getNNPCSyncStatus(): {
   lastSync: Date | null;
+  lastAttempt: Date | null;
+  lastError: string | null;
   isConfigured: boolean;
+  usingMock: boolean;
+  autoSyncEnabled: boolean;
   syncInterval: number;
   isRunning: boolean;
 } {
   return {
-    lastSync: null,
-    isConfigured: !!NNPC_API_KEY || process.env.USE_MOCK_NNPC === "true",
+    lastSync,
+    lastAttempt,
+    lastError: lastSyncError,
+    isConfigured: Boolean(NNPC_API_KEY),
+    usingMock: USING_MOCK_NNPC,
+    autoSyncEnabled: AUTO_SYNC_ENABLED,
     syncInterval: SYNC_INTERVAL,
-    isRunning: false,
+    isRunning: isSyncRunning,
   };
 }
 
-if (process.env.AUTO_SYNC_NNPC === "true") {
-  setTimeout(() => syncNNPCData(), 10000);
-  setInterval(() => syncNNPCData(), SYNC_INTERVAL);
+if (AUTO_SYNC_ENABLED) {
+  setTimeout(() => void syncNNPCData(), 10_000);
+  const syncTimer = setInterval(() => void syncNNPCData(), SYNC_INTERVAL);
+  syncTimer.unref();
 }
 
 export default {

@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middleware/auth.js";
 import { storage } from "../storage.js";
-import { syncNNPCData, getNNPCPrice, getNNPCPriceHistory, isNNPCAvailable, getNNPCSyncStatus } from "../services/nnpcService.js";
+import { syncNNPCData, getNNPCPrice, getNNPCPriceHistory, getNNPCSyncStatus } from "../services/nnpcService.js";
 import { ensureString, ensureNumber } from "../utils/params.js";
 
 export async function getNnpcPrice(req: AuthRequest, res: Response) {
@@ -65,9 +65,8 @@ export async function getNnpcPriceHistory(req: AuthRequest, res: Response) {
 
 export async function getNnpcStatus(req: AuthRequest, res: Response) {
   try {
-    const isAvailable = await isNNPCAvailable();
     const status = getNNPCSyncStatus();
-    return res.json({ success: true, data: { available: isAvailable, ...status } });
+    return res.json({ success: true, data: status });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }

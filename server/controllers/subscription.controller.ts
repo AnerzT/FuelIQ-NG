@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { storage } from "../storage.js";
 import type { AuthRequest } from "../middleware/auth.js";
-import { TIER_LIMITS, TIER_PRICES, type SubscriptionTier } from "../../shared/schema.js";
+import { TIER_LIMITS, TIER_PRICES, type SubscriptionTier, type User } from "../../shared/schema.js";
 import { ensureString } from "../utils/params.js";
 
 export async function getSubscriptionInfo(req: AuthRequest, res: Response) {
@@ -51,9 +51,30 @@ export async function updateSubscription(req: AuthRequest, res: Response) {
     const userId = ensureString(req.userId);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const { subscriptionTier, tier, assignedTerminalId } = req.body;
-    const updateData: any = {};
-    if (subscriptionTier || tier) updateData.subscriptionTier = subscriptionTier || tier;
+    const { subscriptionTier, tier, assignedTerminalId } = req.body || {};
+    const requestedTier = subscriptionTier || tier;
+    const updateData: Partial<User> = {};
+    if (requestedTier) {
+      if (!Object.prototype.hasOwnProperty.call(TIER_LIMITS, requestedTier)) {
+        return res.status(400).json({ success: false, message: "Invalid subscription tier" });
+      }
+      const currentUser = await storage.getUser(userId);
+      if (!currentUser) return res.status(404).json({ success: false, message: "User not found" });
+      const tierOrder: SubscriptionTier[] = ["free", "basic", "pro", "elite", "enterprise"];
+      const currentIndex = tierOrder.indexOf(currentUser.subscriptionTier as SubscriptionTier);
+      const requestedIndex = tierOrder.indexOf(requestedTier as SubscriptionTier);
+      if (requestedIndex > currentIndex) {
+        return res.status(402).json({
+          success: false,
+          message: "Paid plan upgrades must be completed through checkout",
+        });
+      }
+      updateData.subscriptionTier = requestedTier;
+      if (requestedTier === "free") {
+        updateData.subscriptionStartDate = undefined;
+        updateData.subscriptionEndDate = undefined;
+      }
+    }
     if (assignedTerminalId) updateData.assignedTerminalId = assignedTerminalId;
 
     const updatedUser = await storage.updateUser(userId, updateData);
@@ -99,9 +120,10 @@ export async function adminUpdateSubscription(req: AuthRequest, res: Response) {
     const userId = ensureString(req.params.userId);
     if (!userId) return res.status(400).json({ success: false, message: "User ID required" });
 
-    const { subscriptionTier, assignedTerminalId } = req.body;
+    const { subscriptionTier, tier, assignedTerminalId } = req.body || {};
+    const requestedTier = subscriptionTier || tier;
     const updateData: any = {};
-    if (subscriptionTier) updateData.subscriptionTier = subscriptionTier;
+    if (requestedTier) updateData.subscriptionTier = requestedTier;
     if (assignedTerminalId) updateData.assignedTerminalId = assignedTerminalId;
 
     const updatedUser = await storage.updateUser(userId, updateData);

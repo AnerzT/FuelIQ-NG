@@ -2,7 +2,6 @@ import type { Response } from "express";
 import { storage } from "../storage.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { ensureString, ensureNumber, ensureBoolean } from "../utils/params.js";
-import { getNNPCPrice } from "../services/nnpcService.js";
 
 export async function getDepots(req: AuthRequest, res: Response) {
   try {
@@ -46,8 +45,7 @@ export async function getDepotPrices(req: AuthRequest, res: Response) {
   try {
     const depotId = ensureString(req.query.depotId);
     const productType = ensureString(req.query.productType);
-    const liveMarketPrice = await getNNPCPrice(productType || "PMS");
-    const prices = await storage.getDepotPrices(depotId, productType, liveMarketPrice?.price);
+    const prices = await storage.getDepotPrices(depotId, productType);
     res.setHeader("Cache-Control", "no-store, max-age=0");
     return res.json({ success: true, data: prices });
   } catch (err: any) {
@@ -64,6 +62,7 @@ export async function createDepotPrice(req: AuthRequest, res: Response) {
       depotId: ensureString(depotId),
       productType: ensureString(productType, "PMS"),
       price: ensureNumber(price, 0),
+      source: "admin",
     });
     return res.status(201).json({ success: true, data: depotPrice });
   } catch (err: any) {

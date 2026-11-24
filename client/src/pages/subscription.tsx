@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { authFetch } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
 import {
   Check,
   X,
@@ -17,6 +19,21 @@ import {
 import { TIER_LIMITS, TIER_PRICES, type SubscriptionTier } from "@shared/schema";
 
 const tierOrder: SubscriptionTier[] = ["free", "basic", "pro", "elite", "enterprise"];
+
+interface PaymentOptions {
+  stripeAvailable: boolean;
+  bankTransferAvailable: boolean;
+  bankTransfer: { bankName: string; accountNumber: string; accountName: string } | null;
+}
+
+interface PaymentRequest {
+  id: string;
+  subscriptionTier: string;
+  amount: number;
+  transactionReference: string;
+  status: "pending_verification" | "approved" | "rejected";
+  createdAt: string;
+}
 
 const tierColors: Record<SubscriptionTier, { badge: string; border: string; bg: string; glow: string }> = {
   free: {
@@ -90,6 +107,72 @@ export default function SubscriptionPage() {
   const { user, token, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier | null>(null);
+  const [transactionReference, setTransactionReference] = useState("");
+  const fetchFn = authFetch(token);
+
+  const { data: subData } = useQuery({
+    queryKey: ["/api/subscription"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+  const { data: paymentOptions, isLoading: paymentOptionsLoading } = useQuery<PaymentOptions>({
+    queryKey: ["/api/subscription/payment-options"],
+    queryFn: fetchFn,
+    enabled: !!token,
+  });
+  const { data: paymentRequests } = useQuery<PaymentRequest[]>({
+    queryKey: ["/api/subscription/payment-requests"],
+    queryFn: fetchFn,
+    enabled: !!token && Boolean(paymentOptions?.bankTransferAvailable),
+    refetchInterval: 15_000,
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout_success") === "1") {
+      toast({ title: "Payment received", description: "Your plan will update after payment verification." });
+      queryClient.invalidateQueries({ queryKey: ["/api/subscription"] });
+      void refreshUser();
+      params.delete("checkout_success");
+      params.delete("tier");
+      const remainingParams = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${remainingParams ? `?${remainingParams}` : ""}`);
+    } else if (params.get("checkout_cancel") === "1") {
+      toast({ title: "Checkout cancelled" });
+      params.delete("checkout_cancel");
+      const remainingParams = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${remainingParams ? `?${remainingParams}` : ""}`);
+    }
+  }, [refreshUser, toast]);
+
+  const bankTransferMutation = useMutation({
+    mutationFn: async ({ tier, reference }: { tier: SubscriptionTier; reference: string }) => {
+      const response = await fetch("/api/subscription/payment-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ subscriptionTier: tier, transactionReference: reference }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Failed to submit payment");
+      return result;
+    },
+    onSuccess: async () => {
+      setSelectedTier(null);
+      setTransactionReference("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/subscription/payment-requests"] });
+      toast({
+        title: "Payment submitted",
+        description: "Your subscription will activate after an admin verifies the bank transfer.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Payment submission failed", description: error.message, variant: "destructive" });
+    },
+  });
 
   const checkoutMutation = useMutation({
     mutationFn: async (tier: SubscriptionTier) => {
@@ -143,34 +226,52 @@ export default function SubscriptionPage() {
     },
   });
 
+  const currentTier = ((user as any)?.subscriptionTier || "free") as SubscriptionTier;
+
+  useEffect(() => {
+    const latestApproved = paymentRequests?.find(request => request.status === "approved");
+    if (latestApproved && user && latestApproved.subscriptionTier !== user.subscriptionTier) {
+      void refreshUser();
+    }
+  }, [paymentRequests, refreshUser, user]);
+
   if (!user) {
     setLocation("/login");
     return null;
   }
 
-  const currentTier = ((user as any).subscriptionTier || "free") as SubscriptionTier;
   const currentPrice = TIER_PRICES[currentTier];
-  const fetchFn = authFetch(token);
 
   const handleSubscriptionAction = (tier: SubscriptionTier) => {
     const currentIndex = tierOrder.indexOf(currentTier);
     const targetIndex = tierOrder.indexOf(tier);
 
     if (tier === "free" || targetIndex < currentIndex) {
+      setSelectedTier(null);
       updateSubscriptionMutation.mutate(tier);
       return;
     }
 
-    checkoutMutation.mutate(tier);
+    if (tier === "enterprise") {
+      toast({ title: "Enterprise pricing is custom", description: "Contact FuelIQ to arrange an Enterprise subscription." });
+      return;
+    }
+    if (paymentOptions?.stripeAvailable) {
+      checkoutMutation.mutate(tier);
+      return;
+    }
+    if (paymentOptions?.bankTransferAvailable) {
+      setSelectedTier(tier);
+      return;
+    }
+    toast({
+      title: "Payment unavailable",
+      description: paymentOptionsLoading ? "Payment options are still loading." : "No verified payment method is configured.",
+      variant: "destructive",
+    });
   };
 
-  const { data: subData } = useQuery({
-    queryKey: ["/api/subscription"],
-    queryFn: fetchFn,
-    enabled: !!token,
-  });
-
-  const usage = subData?.data?.usage;
+  const usage = subData?.usage;
 
   return (
     <div className="min-h-screen bg-[#060b18]" data-testid="page-subscription">
@@ -303,11 +404,28 @@ export default function SubscriptionPage() {
                       <Button
                         className={`w-full ${isUpgrade ? "bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25 border-0" : "bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/[0.08]"}`}
                         onClick={() => handleSubscriptionAction(tier)}
-                        disabled={updateSubscriptionMutation.isPending || checkoutMutation.isPending}
+                        disabled={
+                          tier === "enterprise" ||
+                          updateSubscriptionMutation.isPending ||
+                          checkoutMutation.isPending ||
+                          bankTransferMutation.isPending ||
+                          (isUpgrade && (
+                            paymentOptionsLoading ||
+                            (!paymentOptions?.stripeAvailable && !paymentOptions?.bankTransferAvailable)
+                          ))
+                        }
                         data-testid={`button-tier-${tier}`}
                       >
                         <ChevronRight className="w-4 h-4 mr-1" />
-                        {isUpgrade ? `Upgrade to ${limits.label}` : `Switch to ${limits.label}`}
+                        {tier === "enterprise"
+                          ? "Custom pricing"
+                          : isUpgrade && paymentOptions?.stripeAvailable
+                            ? `Continue to ${limits.label} checkout`
+                            : isUpgrade && paymentOptions?.bankTransferAvailable
+                              ? `Pay for ${limits.label} by transfer`
+                              : isUpgrade
+                                ? `Payment unavailable`
+                                : `Switch to ${limits.label}`}
                       </Button>
                     )}
                   </div>
@@ -316,6 +434,75 @@ export default function SubscriptionPage() {
             })}
           </div>
         </div>
+
+        {selectedTier && paymentOptions?.bankTransfer && (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-6 space-y-5" data-testid="card-bank-transfer">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Bank transfer for {TIER_LIMITS[selectedTier].label}</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                Transfer {TIER_PRICES[selectedTier].priceLabel} to the account below. Your plan activates only after the payment is verified.
+              </p>
+            </div>
+            <dl className="grid gap-3 sm:grid-cols-3 text-sm">
+              <div><dt className="text-slate-500">Bank</dt><dd className="mt-1 font-medium text-white">{paymentOptions.bankTransfer.bankName}</dd></div>
+              <div><dt className="text-slate-500">Account name</dt><dd className="mt-1 font-medium text-white">{paymentOptions.bankTransfer.accountName}</dd></div>
+              <div><dt className="text-slate-500">Account number</dt><dd className="mt-1 font-medium text-white">{paymentOptions.bankTransfer.accountNumber}</dd></div>
+            </dl>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                bankTransferMutation.mutate({ tier: selectedTier, reference: transactionReference.trim() });
+              }}
+            >
+              <label htmlFor="transfer-reference" className="block text-sm font-medium text-slate-300">
+                Bank transaction reference
+              </label>
+              <Input
+                id="transfer-reference"
+                value={transactionReference}
+                onChange={(event) => setTransactionReference(event.target.value)}
+                placeholder="Enter the reference shown on your transfer receipt"
+                minLength={4}
+                maxLength={100}
+                required
+                className="bg-white/[0.03] border-white/[0.08] text-white"
+                data-testid="input-transfer-reference"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={bankTransferMutation.isPending || transactionReference.trim().length < 4}>
+                  {bankTransferMutation.isPending ? "Submitting…" : "Submit for verification"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setSelectedTier(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+            <p className="text-xs text-slate-500">
+              Transfers are checked manually. Do not submit a request until you have completed the transfer.
+            </p>
+          </div>
+        )}
+
+        {paymentRequests?.length ? (
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 space-y-3" data-testid="card-payment-status">
+            <h3 className="text-lg font-semibold text-white">Payment request status</h3>
+            {paymentRequests.map((request) => (
+              <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="text-slate-300">
+                  {TIER_LIMITS[request.subscriptionTier as SubscriptionTier]?.label || request.subscriptionTier} · Ref {request.transactionReference}
+                </span>
+                <span className={
+                  request.status === "approved" ? "text-emerald-400" :
+                    request.status === "rejected" ? "text-red-400" : "text-amber-400"
+                }>
+                  {request.status === "pending_verification" ? "Pending verification" :
+                    request.status === "approved" ? "Approved" : "Rejected"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6" data-testid="card-tier-comparison">
           <h3 className="text-lg font-semibold text-white mb-4">Feature Comparison</h3>
