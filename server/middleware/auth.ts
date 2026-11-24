@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { ADMIN_EMAIL } from "../../shared/admin.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your-secret-key";
 if (!JWT_SECRET) {
@@ -10,6 +11,7 @@ import type { SubscriptionTier } from "../../shared/schema.js";
 
 export interface AuthRequest extends Request {
   userId?: string;
+  userEmail?: string;
   userRole?: string;
   subscriptionTier?: SubscriptionTier;
 }
@@ -18,13 +20,13 @@ export function generateToken(userId: string): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d" });
 }
 
-export function verifyToken(token: string): { userId: string } {
-  const payload = jwt.verify(token, JWT_SECRET) as { userId?: string; id?: string };
+export function verifyToken(token: string): { userId: string; email?: string; role?: string } {
+  const payload = jwt.verify(token, JWT_SECRET) as { userId?: string; id?: string; email?: string; role?: string };
   const userId = payload.userId || payload.id;
   if (!userId) {
     throw new Error("Token does not contain a user id");
   }
-  return { userId };
+  return { userId, email: payload.email, role: payload.role };
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -38,6 +40,8 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     const token = authHeader.split(" ")[1];
     const decoded = verifyToken(token);
     req.userId = decoded.userId;
+    req.userEmail = decoded.email;
+    req.userRole = decoded.role;
     next();
   } catch {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
@@ -45,7 +49,10 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 }
 
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!req.userRole || req.userRole !== "admin") {
+  if (
+    req.userRole !== "admin" ||
+    req.userEmail?.trim().toLowerCase() !== ADMIN_EMAIL
+  ) {
     return res.status(403).json({ success: false, message: "Admin access required" });
   }
   next();

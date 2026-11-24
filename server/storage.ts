@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
+import { ADMIN_EMAIL } from "../shared/admin.js";
 
 /* =========================
    TYPES
@@ -45,6 +46,19 @@ type DepotPrice = {
   productType: string;
   price: number;
   updatedAt: Date;
+  source?: string;
+};
+
+type DepotPriceListing = {
+  id: string;
+  depotId: string;
+  depotName: string;
+  terminalId: string;
+  terminalName: string;
+  productType: string;
+  price: number;
+  updatedAt: Date;
+  source: string;
 };
 
 type Forecast = {
@@ -102,6 +116,8 @@ type PriceHistoryEntry = {
   productType: string;
   date: Date;
   price: number;
+  source?: string;
+  sourceReference?: string;
 };
 
 type Inventory = {
@@ -139,6 +155,18 @@ type NotificationLog = {
   createdAt: Date;
 };
 
+type SubscriptionPaymentRequest = {
+  id: string;
+  userId: string;
+  subscriptionTier: "basic" | "pro" | "elite";
+  amount: number;
+  transactionReference: string;
+  status: "pending_verification" | "approved" | "rejected";
+  createdAt: Date;
+  reviewedAt?: Date;
+  reviewedBy?: string;
+};
+
 /* ================= TRADER SIGNALS ================= */
 
 type TraderSignal = {
@@ -171,6 +199,7 @@ class Storage {
   transactions: Transaction[] = [];
   fxRates: FxRate[] = [];
   notifications: NotificationLog[] = [];
+  subscriptionPaymentRequests: SubscriptionPaymentRequest[] = [];
   traderSignals: TraderSignal[] = []; // Fix TS2552: was traderSignal (lowercase), must be TraderSignal
   priceHistory: PriceHistoryEntry[] = [];
   refineryUpdates: RefineryUpdate[] = [];
@@ -187,16 +216,12 @@ class Storage {
 
   constructor() {
     this.users = this.loadUsers();
-    const configuredAdmins = new Set(
-      (process.env.ADMIN_EMAILS || "umar_anasty@ymail.com")
-        .split(",")
-        .map(email => email.trim().toLowerCase())
-        .filter(Boolean),
-    );
     let adminsUpdated = false;
     for (const user of this.users) {
-      if (configuredAdmins.has(user.email.trim().toLowerCase()) && user.role !== "admin") {
-        user.role = "admin";
+      const shouldBeAdmin = user.email.trim().toLowerCase() === ADMIN_EMAIL;
+      const role = shouldBeAdmin ? "admin" : user.role === "admin" ? "marketer" : user.role;
+      if (user.role !== role) {
+        user.role = role;
         adminsUpdated = true;
       }
     }
@@ -217,6 +242,7 @@ class Storage {
         priceHistory: ["date"],
         refineryUpdates: ["createdAt"],
         regulationUpdates: ["effectiveDate", "createdAt"],
+        subscriptionPaymentRequests: ["createdAt", "reviewedAt"],
       };
       for (const key of [
         "terminals",
@@ -228,6 +254,7 @@ class Storage {
         "transactions",
         "fxRates",
         "notifications",
+        "subscriptionPaymentRequests",
         "traderSignals",
         "priceHistory",
         "refineryUpdates",
@@ -264,6 +291,7 @@ class Storage {
       transactions: this.transactions,
       fxRates: this.fxRates,
       notifications: this.notifications,
+      subscriptionPaymentRequests: this.subscriptionPaymentRequests,
       traderSignals: this.traderSignals,
       priceHistory: this.priceHistory,
       refineryUpdates: this.refineryUpdates,
@@ -346,6 +374,7 @@ class Storage {
           productType: "PMS",
           date,
           price: expectedMin + ((daysAgo * 7 + code.length) % 20),
+          source: "sample",
         });
       }
     }
@@ -517,6 +546,78 @@ class Storage {
     return user;
   }
 
+  async createSubscriptionPaymentRequest(data: {
+    userId: string;
+    subscriptionTier: "basic" | "pro" | "elite";
+    amount: number;
+    transactionReference: string;
+  }) {
+    const normalizedReference = data.transactionReference.trim().toUpperCase();
+    if (
+      this.subscriptionPaymentRequests.some(
+        request => request.transactionReference.toUpperCase() === normalizedReference,
+      )
+    ) return null;
+
+    const request: SubscriptionPaymentRequest = {
+      id: randomUUID(),
+      ...data,
+      transactionReference: normalizedReference,
+      status: "pending_verification",
+      createdAt: new Date(),
+    };
+    this.subscriptionPaymentRequests.unshift(request);
+    this.persistState();
+    return request;
+  }
+
+  async getSubscriptionPaymentRequests(userId?: string) {
+    return this.subscriptionPaymentRequests
+      .filter(request => !userId || request.userId === userId)
+      .map(request => {
+        const user = this.users.find(item => item.id === request.userId);
+        return {
+          ...request,
+          userName: user?.name || "Unknown user",
+          email: user?.email || "",
+        };
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async reviewSubscriptionPaymentRequest(
+    requestId: string,
+    decision: "approved" | "rejected",
+    reviewedBy: string,
+  ) {
+    const request = this.subscriptionPaymentRequests.find(item => item.id === requestId);
+    if (!request || request.status !== "pending_verification") return null;
+
+    if (decision === "approved") {
+      const user = this.users.find(item => item.id === request.userId);
+      if (!user) return null;
+      const startsAt = new Date();
+      const endsAt = new Date(startsAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+      Object.assign(user, {
+        subscriptionTier: request.subscriptionTier,
+        subscriptionStartDate: startsAt,
+        subscriptionEndDate: endsAt,
+      });
+      this.persistUsers();
+    }
+
+    request.status = decision;
+    request.reviewedAt = new Date();
+    request.reviewedBy = reviewedBy;
+    this.persistState();
+    const user = this.users.find(item => item.id === request.userId);
+    return {
+      ...request,
+      userName: user?.name || "Unknown user",
+      email: user?.email || "",
+    };
+  }
+
   /* ================= TERMINALS ================= */
 
   async getAllTerminals() {
@@ -555,42 +656,74 @@ class Storage {
 
   /* ================= DEPOT PRICES ================= */
 
-  async getDepotPrices(depotId?: string, productType?: string, liveMarketPrice?: number) {
-    const filtered = this.depotPrices.filter(p =>
-      (!depotId || p.depotId === depotId) &&
-      (!productType || p.productType === productType)
-    );
+  async getDepotPrices(depotId?: string, productType?: string) {
+    const requestedDepot = depotId ? this.depots.find(depot => depot.id === depotId) : undefined;
+    if (depotId && !requestedDepot) return [];
 
-    const enriched = filtered.map(p => {
-      const depot = this.depots.find(d => d.id === p.depotId);
-      const terminal = depot ? this.terminals.find(t => t.id === depot.terminalId) : undefined;
-      return {
-        ...p,
-        depotName: depot?.name || null,
-        terminalId: depot?.terminalId || null,
+    const histories = this.priceHistory
+      .filter(entry =>
+        (!productType || entry.productType === productType) &&
+        (!requestedDepot || entry.terminalId === requestedDepot.terminalId)
+      )
+      .sort((a, b) => {
+        const sourcePriority = (entry: PriceHistoryEntry) =>
+          entry.source && entry.source !== "sample" ? 1 : 0;
+        return sourcePriority(b) - sourcePriority(a) || b.date.getTime() - a.date.getTime();
+      });
+    const latestByLocationProduct = new Map<string, PriceHistoryEntry>();
+    for (const entry of histories) {
+      const key = `${entry.terminalId}:${entry.productType}`;
+      if (!latestByLocationProduct.has(key)) latestByLocationProduct.set(key, entry);
+    }
+
+    const results: DepotPriceListing[] = [];
+    const representedDepotPrices = new Set<string>();
+    for (const entry of latestByLocationProduct.values()) {
+      const terminal = this.terminals.find(item => item.id === entry.terminalId);
+      if (!terminal) continue;
+      const depot = this.depots.find(item => item.terminalId === terminal.id);
+      if (depotId && depot?.id !== depotId) continue;
+
+      const storedPrice = depot
+        ? this.depotPrices
+            .filter(price => price.depotId === depot.id && price.productType === entry.productType)
+            .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]
+        : undefined;
+      if (storedPrice) representedDepotPrices.add(storedPrice.id);
+      const useStoredPrice = !!storedPrice &&
+        (entry.source === "sample" || !entry.source || storedPrice.updatedAt > entry.date);
+      results.push({
+        id: useStoredPrice ? storedPrice!.id : entry.id,
+        depotId: depot?.id || terminal.id,
+        depotName: depot?.name || terminal.name,
+        terminalId: terminal.id,
+        terminalName: terminal.name,
+        productType: entry.productType,
+        price: useStoredPrice ? storedPrice!.price : entry.price,
+        updatedAt: useStoredPrice ? storedPrice!.updatedAt : entry.date,
+        source: useStoredPrice ? storedPrice!.source || "admin" : entry.source || "sample",
+      });
+    }
+
+    for (const price of this.depotPrices) {
+      if (
+        representedDepotPrices.has(price.id) ||
+        (depotId && price.depotId !== depotId) ||
+        (productType && price.productType !== productType)
+      ) continue;
+      const depot = this.depots.find(item => item.id === price.depotId);
+      if (!depot) continue;
+      const terminal = this.terminals.find(item => item.id === depot.terminalId);
+      results.push({
+        ...price,
+        depotName: depot.name,
+        terminalId: depot.terminalId,
         terminalName: terminal?.name || null,
-      } as any;
-    });
+        source: price.source || "admin",
+      });
+    }
 
-    if (enriched.length > 0) return enriched;
-
-    // Fallback sample prices when storage is empty
-    const now = new Date();
-    const basePrice = liveMarketPrice ?? (productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620);
-    const sourceTerminals = this.terminals.length > 0 ? this.terminals : [{ id: "SAMPLE_T1", name: "Sample Terminal" }];
-
-    const fallback = sourceTerminals.slice(0, 6).map((t, i) => ({
-      id: randomUUID(),
-      depotId: `fallback-${i}`,
-      depotName: `${t.name || "Depot"} ${i + 1}`,
-      terminalId: t.id,
-      terminalName: t.name,
-      productType: productType || "PMS",
-      price: Math.round(basePrice + ((i * 7 + Math.sin(Date.now() / 600000 + i) * 4) % 30)),
-      updatedAt: now,
-    }));
-
-    return fallback;
+    return results.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
   async createDepotPrice(data: Partial<DepotPrice>) {
@@ -867,42 +1000,77 @@ class Storage {
       .filter((entry) => entry.terminalId === terminalId && entry.productType === productType)
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    if (allHistory.length > 0) {
-      const latest = allHistory[allHistory.length - 1];
-      const productBase = productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620;
-      const terminalOffset = terminalId.split("").reduce((total, character) => total + character.charCodeAt(0), 0) % 18;
-      const liveMovement = Math.round(Math.sin(Date.now() / 600000) * 8);
-      const livePrice = Math.max(300, productBase + terminalOffset + liveMovement);
-      const now = new Date();
-      if (latest.date.getTime() < now.getTime() - 60_000 || latest.price !== livePrice) {
-        const currentEntry = {
-          id: randomUUID(),
-          terminalId,
-          productType,
-          date: now,
-          price: livePrice,
-        };
-        this.priceHistory.push(currentEntry);
-        this.persistState();
-        allHistory.push(currentEntry);
-      }
-      return allHistory.slice(-days);
+    return allHistory.slice(-days);
+  }
+
+  async recordPriceObservation(data: {
+    location: string;
+    productType: string;
+    price: number;
+    source: string;
+    observedAt?: Date;
+    sourceReference?: string;
+    deduplicateUnchangedPrice?: boolean;
+  }) {
+    const normalizedLocation = data.location.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const terminal = this.terminals.find(item => {
+      const names = [item.name, item.code].map(value =>
+        value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+      );
+      return names.some(name => normalizedLocation === name || normalizedLocation.includes(name));
+    });
+    if (!terminal) throw new Error(`Unknown price location: ${data.location}`);
+    if (!Number.isFinite(data.price) || data.price <= 0) throw new Error("Price must be a positive number");
+
+    if (data.sourceReference) {
+      const duplicate = this.priceHistory.find(entry => entry.sourceReference === data.sourceReference);
+      if (duplicate) return { ...duplicate, created: false, priceChanged: false };
     }
 
-    const basePrice = productType === "AGO" ? 950 : productType === "JET_A1" ? 880 : productType === "LPG" ? 1100 : 620;
-    const today = new Date();
-    return Array.from({ length: days }).map((_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (days - 1 - index));
-      const variance = Math.round((Math.sin(index / 3) * 8 + Math.random() * 10) * 10) / 10;
-      return {
-        id: randomUUID(),
-        terminalId,
-        productType,
-        date,
-        price: Math.max(300, basePrice + variance),
-      };
-    });
+    const previousQuote = this.priceHistory
+      .filter(item =>
+        item.terminalId === terminal.id &&
+        item.productType === data.productType &&
+        item.source === data.source
+      )
+      .sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+    if (data.deduplicateUnchangedPrice && previousQuote?.price === data.price) {
+      return { ...previousQuote, created: false, priceChanged: false };
+    }
+
+    const observedAt = data.observedAt && Number.isFinite(data.observedAt.getTime())
+      ? data.observedAt
+      : new Date();
+    const existingQuote = this.priceHistory.find(item =>
+      item.terminalId === terminal.id &&
+      item.productType === data.productType &&
+      item.source === data.source &&
+      item.price === data.price &&
+      item.date.getTime() === observedAt.getTime() &&
+      (!data.sourceReference || item.sourceReference === data.sourceReference)
+    );
+    if (existingQuote) return { ...existingQuote, created: false, priceChanged: false };
+
+    const entry: PriceHistoryEntry = {
+      id: randomUUID(),
+      terminalId: terminal.id,
+      productType: data.productType,
+      date: observedAt,
+      price: data.price,
+      source: data.source,
+      sourceReference: data.sourceReference,
+    };
+    this.priceHistory.push(entry);
+    if (this.priceHistory.length > 10_000) {
+      this.priceHistory.sort((a, b) => a.date.getTime() - b.date.getTime());
+      this.priceHistory.splice(0, this.priceHistory.length - 10_000);
+    }
+    this.persistState();
+    return {
+      ...entry,
+      created: true,
+      priceChanged: !previousQuote || previousQuote.price !== entry.price,
+    };
   }
 }
 

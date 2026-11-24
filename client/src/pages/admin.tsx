@@ -31,11 +31,14 @@ import {
   BarChart3,
   Crown,
   Users,
+  Wallet,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import type { Terminal, Forecast, MarketSignal, SubscriptionTier } from "@shared/schema";
 import { TIER_LIMITS } from "@shared/schema";
 
-type AdminTab = "terminals" | "forecast" | "signals" | "history" | "subscriptions";
+type AdminTab = "terminals" | "forecast" | "signals" | "history" | "subscriptions" | "payments";
 
 interface SubUser {
   id: string;
@@ -87,6 +90,21 @@ export default function Admin() {
     },
     refetchInterval: 30_000,
   });
+  const { data: nnpcSyncStatus } = useQuery<{
+    lastSync: string | null;
+    lastAttempt: string | null;
+    lastError: string | null;
+    isConfigured: boolean;
+    usingMock: boolean;
+    autoSyncEnabled: boolean;
+    syncInterval: number;
+    isRunning: boolean;
+  }>({
+    queryKey: ["/api/admin/sync/nnpc/status"],
+    queryFn: fetchFn,
+    enabled: !!token,
+    refetchInterval: 30_000,
+  });
   const syncMutation = useMutation({
     mutationFn: async (path: string) => {
       const response = await fetch(path, {
@@ -103,6 +121,7 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/forecasts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/forecast"] });
       queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sync/nnpc/status"] });
       toast({ title: payload.message || "Market data synchronized" });
     },
     onError: (error: Error) => {
@@ -144,6 +163,7 @@ export default function Admin() {
     { key: "signals", label: "Update Signals", icon: Activity },
     { key: "history", label: "Forecast History", icon: History },
     { key: "subscriptions", label: "Subscriptions", icon: Users },
+    { key: "payments", label: "Payments", icon: Wallet },
   ];
 
   return (
@@ -175,6 +195,32 @@ export default function Admin() {
                 </div>
                 <span className="text-sm font-medium text-slate-300 hidden sm:block" data-testid="text-admin-name">{user.name}</span>
               </div>
+              <span
+                className={`hidden lg:flex items-center gap-2 text-xs ${
+                  nnpcSyncStatus?.autoSyncEnabled && nnpcSyncStatus.isConfigured
+                    ? "text-emerald-400"
+                    : nnpcSyncStatus?.usingMock
+                      ? "text-amber-400"
+                      : "text-slate-500"
+                }`}
+                title={nnpcSyncStatus?.lastError || undefined}
+                data-testid="text-price-sync-status"
+              >
+                <span className={`w-2 h-2 rounded-full ${
+                  nnpcSyncStatus?.autoSyncEnabled && nnpcSyncStatus.isConfigured
+                    ? "bg-emerald-400"
+                    : nnpcSyncStatus?.usingMock
+                      ? "bg-amber-400"
+                      : "bg-slate-500"
+                }`} />
+                {nnpcSyncStatus?.usingMock
+                  ? "Mock price feed"
+                  : nnpcSyncStatus?.autoSyncEnabled && nnpcSyncStatus.isConfigured
+                    ? `Auto prices · ${Math.round(nnpcSyncStatus.syncInterval / 60_000)} min`
+                    : nnpcSyncStatus?.isConfigured
+                      ? "Live feed · auto-sync off"
+                      : "Live price feed not configured"}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
@@ -276,6 +322,7 @@ export default function Admin() {
         {activeTab === "signals" && <SignalsPanel token={token} fetchFn={fetchFn} toast={toast} />}
         {activeTab === "history" && <HistoryPanel token={token} fetchFn={fetchFn} />}
         {activeTab === "subscriptions" && <SubscriptionsPanel token={token} fetchFn={fetchFn} toast={toast} />}
+        {activeTab === "payments" && <PaymentRequestsPanel token={token} fetchFn={fetchFn} toast={toast} />}
       </main>
     </div>
   );
@@ -840,6 +887,102 @@ function SubscriptionsPanel({ token, fetchFn, toast }: { token: string | null; f
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-20 rounded-xl bg-white/[0.02] border border-white/[0.06] animate-pulse" />
         ))}
+      </div>
+    );
+  }
+
+  interface SubscriptionPaymentRequest {
+    id: string;
+    userName: string;
+    email: string;
+    subscriptionTier: string;
+    amount: number;
+    transactionReference: string;
+    status: "pending_verification" | "approved" | "rejected";
+    createdAt: string;
+  }
+
+  function PaymentRequestsPanel({ token, fetchFn, toast }: { token: string | null; fetchFn: any; toast: any }) {
+    const { data: requests, isLoading } = useQuery<SubscriptionPaymentRequest[]>({
+      queryKey: ["/api/admin/subscription-payment-requests"],
+      queryFn: fetchFn,
+      enabled: !!token,
+    });
+
+    const reviewMutation = useMutation({
+      mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" }) => {
+        const response = await fetch(`/api/admin/subscription-payment-requests/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to review payment");
+        return result;
+      },
+      onSuccess: async (result) => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/subscription-payment-requests"] }),
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/subscriptions"] }),
+        ]);
+        toast({ title: result.message || "Payment request updated" });
+      },
+      onError: (error: Error) => {
+        toast({ title: "Payment review failed", description: error.message, variant: "destructive" });
+      },
+    });
+
+    if (isLoading) {
+      return <div className="h-20 rounded-xl bg-white/[0.02] border border-white/[0.06] animate-pulse" />;
+    }
+
+    return (
+      <div className="space-y-3" data-testid="panel-payment-requests">
+        {requests?.length ? requests.map((request) => (
+          <div key={request.id} className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="min-w-0 space-y-1">
+              <div className="text-sm font-semibold text-white">{request.userName} <span className="font-normal text-slate-400">({request.email})</span></div>
+              <div className="text-xs text-slate-400">
+                {request.subscriptionTier.toUpperCase()} · ₦{request.amount.toLocaleString("en-NG")} · Ref: {request.transactionReference}
+              </div>
+              <div className="text-xs text-slate-500">{new Date(request.createdAt).toLocaleString()}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {request.status === "pending_verification" ? (
+                <>
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-500"
+                    disabled={reviewMutation.isPending}
+                    onClick={() => reviewMutation.mutate({ id: request.id, status: "approved" })}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-1" /> Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={reviewMutation.isPending}
+                    onClick={() => reviewMutation.mutate({ id: request.id, status: "rejected" })}
+                  >
+                    <XCircle className="w-4 h-4 mr-1" /> Reject
+                  </Button>
+                </>
+              ) : (
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                  request.status === "approved"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : "bg-red-500/10 text-red-400"
+                }`}>
+                  {request.status === "approved" ? "Approved" : "Rejected"}
+                </span>
+              )}
+            </div>
+          </div>
+        )) : (
+          <div className="p-8 text-center text-sm text-slate-500 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+            No bank-transfer payment requests.
+          </div>
+        )}
       </div>
     );
   }

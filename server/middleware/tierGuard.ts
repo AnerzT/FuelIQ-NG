@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { storage } from "../storage.js";
 import { TIER_LIMITS, type SubscriptionTier } from "../../shared/schema.js";
 import jwt from "jsonwebtoken";
+import { ADMIN_EMAIL } from "../../shared/admin.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your-secret-key";
 
@@ -45,7 +46,12 @@ export function attachUserRole(storage: any) {
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   const user = (req as any).user;
-  if (!user || user.role !== "admin") {
+  if (
+    !user ||
+    user.role !== "admin" ||
+    typeof user.email !== "string" ||
+    user.email.trim().toLowerCase() !== ADMIN_EMAIL
+  ) {
     res.status(403).json({ success: false, message: "Forbidden: Admin access required" });
     return;
   }

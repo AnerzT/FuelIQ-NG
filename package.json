@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.js",
     "build": "tsc --project tsconfig.server.json && vite build",
     "preview": "npm run build && node dist/server/server/index.js",
     "start": "node dist/server/server/index.js",

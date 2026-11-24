@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "../storage.js";
 import { registerSchema, loginSchema } from "../../shared/schema.js";
+import { ADMIN_EMAIL } from "../../shared/admin.js";
 import { verifyToken, type AuthRequest } from "../middleware/auth.js";
 import { ensureString } from "../utils/params.js";
 
@@ -10,16 +11,17 @@ const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your
 const JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET || process.env.SESSION_SECRET || "your-refresh-secret";
 
-function isConfiguredAdmin(email: string) {
-  const configuredAdmins = (process.env.ADMIN_EMAILS || "umar_anasty@ymail.com")
-    .split(",")
-    .map(value => value.trim().toLowerCase())
-    .filter(Boolean);
-  return configuredAdmins.includes(email.trim().toLowerCase());
+function isAdminEmail(email: string) {
+  return email.trim().toLowerCase() === ADMIN_EMAIL;
+}
+
+function effectiveRole(user: { email: string; role: string }) {
+  if (isAdminEmail(user.email)) return "admin";
+  return user.role === "admin" ? "marketer" : user.role;
 }
 
 function generateTokens(user: any) {
-  const role = isConfiguredAdmin(user.email) ? "admin" : user.role;
+  const role = effectiveRole(user);
   const accessToken = jwt.sign(
     { userId: user.id, email: user.email, role },
     JWT_SECRET,
@@ -64,7 +66,7 @@ export async function register(req: Request, res: Response) {
       password: hashedPassword,
       phone,
       whatsappPhone,
-      role: "marketer",
+      role: isAdminEmail(email) ? "admin" : "marketer",
     });
 
     const { accessToken, refreshToken } = generateTokens(user);
@@ -72,7 +74,7 @@ export async function register(req: Request, res: Response) {
     res.status(201).json({
       success: true,
       data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        user: { id: user.id, name: user.name, email: user.email, role: effectiveRole(user) },
         accessToken,
         refreshToken,
       },
@@ -109,12 +111,14 @@ export async function login(req: Request, res: Response) {
       return;
     }
 
+    const role = effectiveRole(user);
+    if (user.role !== role) await storage.updateUser(user.id, { role });
     const { accessToken, refreshToken } = generateTokens(user);
 
     res.json({
       success: true,
       data: {
-        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        user: { id: user.id, name: user.name, email: user.email, role },
         accessToken,
         refreshToken,
       },
@@ -150,9 +154,10 @@ export async function getMe(req: AuthRequest, res: Response) {
       return;
     }
 
-    if (isConfiguredAdmin(user.email) && user.role !== "admin") {
-      user.role = "admin";
-      await storage.updateUser(user.id, { role: "admin" });
+    const role = effectiveRole(user);
+    if (user.role !== role) {
+      user.role = role;
+      await storage.updateUser(user.id, { role });
     }
 
     res.json({ success: true, data: user });

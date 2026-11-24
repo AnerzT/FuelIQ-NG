@@ -237,6 +237,7 @@ export default function Landing() {
               { icon: Shield, title: "Risk Analysis", desc: "Policy risk assessment and overnight sentiment tracking to protect your margins." },
               { icon: Globe, title: "Multi-Region Coverage", desc: "Forecasts for Lagos, Port Harcourt, Abuja, and other major Nigerian fuel markets." },
               { icon: Zap, title: "Actionable Insights", desc: "Clear buy/sell recommendations with confidence scores and suggested timing." },
+              { icon: Globe, title: "Oil & Gas Market Intelligence", desc: "Follow Brent, WTI, gas/LNG benchmarks, and dated Nigeria sector data with official source links. Paid plans add benchmark history, alerts, and import-cost tools." },
             ].map((feature, i) => (
               <div
                 key={i}
