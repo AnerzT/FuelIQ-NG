@@ -5,7 +5,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { name: string; email: string; password: string }) => Promise<void>;
+  register: (data: { name: string; email: string; password: string; phone: string; verificationChannel: "email" | "sms" }) => Promise<{ verificationSent: boolean }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   isLoading: boolean;
@@ -26,16 +26,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const json = await res.json();
         const userData = json.data?.user || json.data || json.user;
+        if (!userData?.id) throw new Error("Account details were missing from the response");
         setUser(userData);
-      } else {
+      } else if (res.status === 401 || res.status === 404) {
         localStorage.removeItem("fueliq_token");
         setToken(null);
         setUser(null);
+      } else {
+        const error = await res.json().catch(() => null);
+        throw new Error(error?.message || "Unable to load account details");
       }
-    } catch {
-      localStorage.removeItem("fueliq_token");
-      setToken(null);
-      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -43,7 +43,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (token) {
-      fetchUser(token);
+      void fetchUser(token).catch((error) => {
+        console.error("Unable to refresh the signed-in user:", error);
+      });
     } else {
       setIsLoading(false);
     }
@@ -71,12 +73,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!tokenValue) {
       throw new Error("Login response did not include a token");
     }
+    if (!authData.user?.id) {
+      throw new Error("Login response did not include account details");
+    }
     localStorage.setItem("fueliq_token", tokenValue);
+    setUser(authData.user);
     setToken(tokenValue);
-    await fetchUser(tokenValue);
   };
 
-  const register = async (regData: { name: string; email: string; password: string }) => {
+  const register = async (regData: { name: string; email: string; password: string; phone: string; verificationChannel: "email" | "sms" }) => {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,9 +97,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!tokenValue) {
       throw new Error("Registration response did not include a token");
     }
+    if (!authData.user?.id) {
+      throw new Error("Registration response did not include account details");
+    }
     localStorage.setItem("fueliq_token", tokenValue);
+    setUser(authData.user);
     setToken(tokenValue);
-    await fetchUser(tokenValue);
+    return { verificationSent: Boolean(authData.verificationSent) };
   };
 
   const logout = () => {

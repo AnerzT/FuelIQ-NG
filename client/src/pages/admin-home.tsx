@@ -70,10 +70,13 @@ export default function AdminHome() {
   const eliteUsers = subs?.filter((s) => s.tier === "elite").length ?? 0;
 
   const quickLinks = [
+    { label: "Manage customer accounts", target: "/admin/users", description: "Review registered accounts and delete or anonymize an account." },
     { label: "Manage Terminals", target: "/admin/panel", description: "See terminal status and toggle availability." },
     { label: "Create Forecast", target: "/admin/panel", description: "Add a new market forecast." },
     { label: "Update Signals", target: "/admin/panel", description: "Refresh vessel, FX, and policy signals." },
     { label: "Subscriptions", target: "/admin/panel", description: "Review active users and subscription tiers." },
+    { label: "Fuel Finder", target: "/admin/panel?tab=fuel-finder", description: "Manage station records, price observations, and availability reports." },
+    { label: "Community reporting", target: "/admin/community", description: "Approve customers and businesses, moderate price reports, and resolve disputes." },
   ];
 
   return (

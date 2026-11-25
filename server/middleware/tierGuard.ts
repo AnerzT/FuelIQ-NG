@@ -3,10 +3,11 @@ import { storage } from "../storage.js";
 import { TIER_LIMITS, type SubscriptionTier } from "../../shared/schema.js";
 import jwt from "jsonwebtoken";
 import { ADMIN_EMAIL } from "../../shared/admin.js";
+import { customerIdentity } from "../services/customer-identity.service.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "your-secret-key";
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     res.status(401).json({ success: false, message: "Unauthorized" });
@@ -21,8 +22,19 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
-    (req as any).userId = decoded.userId || decoded.id;
-    (req as any).userRole = decoded.role;
+    const userId = decoded.userId || decoded.id;
+    if (typeof userId !== "string") {
+      res.status(401).json({ success: false, message: "Invalid token" });
+      return;
+    }
+    const account = await storage.getUser(userId);
+    if (!account || account.deletedAt) {
+      res.status(401).json({ success: false, message: "This account is no longer active." });
+      return;
+    }
+    (req as any).userId = userId;
+    (req as any).userRole = account.role;
+    (req as any).user = account;
     next();
   } catch (error) {
     res.status(401).json({ success: false, message: "Invalid token" });
@@ -56,6 +68,25 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return;
   }
   next();
+}
+
+export function requireVerifiedCustomer(req: Request, res: Response, next: NextFunction): void {
+  const userId = (req as any).userId as string | undefined;
+  if (!userId) {
+    res.status(401).json({ success: false, message: "Authentication required." });
+    return;
+  }
+  void customerIdentity.getProfile(userId).then((profile) => {
+    if (!profile || (!profile.emailVerified && !profile.phoneVerified) || profile.accountStatus !== "approved") {
+      res.status(403).json({
+        success: false,
+        code: "CUSTOMER_NOT_APPROVED",
+        message: "Verify your email or phone and wait for administrator approval before using community reporting.",
+      });
+      return;
+    }
+    next();
+  }).catch(next);
 }
 
 export function requireTier(requiredTier: SubscriptionTier) {

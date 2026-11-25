@@ -61,9 +61,8 @@ export default function PrivacyPolicy() {
             title="4. Data Storage & Retention"
             content={[
               "Your data is stored on secure PostgreSQL databases hosted within Replit's infrastructure with automated backups.",
-              "Account data is retained for the duration of your subscription. Forecast history and market data are retained for analytics and historical reference.",
-              "Transaction and inventory records are maintained for the life of your account to support audit trails and P&L calculations.",
-              "You may request deletion of your account and associated data at any time by contacting our support team.",
+              "You may permanently close your account from Dashboard > Settings after confirming your current password. Administrators may also delete accounts for support or safety reasons.",
+              "When an account is closed, sign-in is disabled, direct account details and verification targets are anonymized or removed, and registered business assets are suspended. Records needed for safety, reporting integrity, legal obligations, or transaction history may be retained in anonymized or restricted form.",
             ]}
           />
 
