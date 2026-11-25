@@ -16,25 +16,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [attempts, setAttempts] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (attempts >= 5) {
-      toast({
-        title: "Too many attempts",
-        description: "Please wait a moment before trying again.",
-        variant: "destructive",
-      });
-      return;
-    }
     setLoading(true);
     try {
       await login(email, password);
-      setAttempts(0);
       setLocation("/dashboard");
     } catch (err: any) {
-      setAttempts((prev) => prev + 1);
       toast({ title: "Login failed", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -59,15 +48,15 @@ export default function Login() {
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email or phone</Label>
                 <Input
                   id="email"
-                  type="email"
-                  placeholder="you@company.com"
+                  type="text"
+                  placeholder="you@company.com or +234..."
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  autoComplete="email"
+                  autoComplete="username"
                   data-testid="input-email"
                 />
               </div>
@@ -96,9 +85,9 @@ export default function Login() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full" disabled={loading || attempts >= 5} data-testid="button-submit-login">
+              <Button type="submit" className="w-full" disabled={loading} data-testid="button-submit-login">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
-                {attempts >= 5 ? "Too Many Attempts" : "Sign In Securely"}
+                Sign In Securely
               </Button>
             </form>
 
@@ -128,7 +117,8 @@ export default function Login() {
               Create one
             </Link>
           </p>
-          <p className="text-center text-xs text-muted-foreground/60">
+          <p className="text-center text-sm"><Link href="/password-recovery" className="text-primary underline">Forgot your password?</Link></p>
+          <div className="text-center text-xs text-muted-foreground/60">
             By signing in, you agree to our{" "}
             <div className="flex items-center justify-center gap-3">
               <Link href="/privacy" className="underline hover:text-muted-foreground transition-colors" data-testid="link-privacy-from-login">
@@ -139,7 +129,7 @@ export default function Login() {
                 Terms of Use
               </Link>
             </div>
-          </p>
+          </div>
         </div>
       </div>
     </div>

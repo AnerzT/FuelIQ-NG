@@ -24,6 +24,12 @@ export function Navbar() {
             <a href="#features" className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-features">Features</a>
             <a href="#how-it-works" className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-how-it-works">How It Works</a>
             <a href="#pricing" className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-pricing">Pricing</a>
+            <button onClick={() => setLocation("/fuel-finder")} className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-fuel-finder">Fuel Finder</button>
+            {user && <button onClick={() => setLocation("/community")} className="text-sm text-slate-300 hover:text-white transition-colors">Community</button>}
+            {user && <button onClick={() => setLocation("/messages")} className="text-sm text-slate-300 hover:text-white transition-colors">Messages</button>}
+            {user && <button onClick={() => setLocation("/marketplace")} className="text-sm text-slate-300 hover:text-white transition-colors">Marketplace</button>}
+            {user?.role === "admin" && <button onClick={() => setLocation("/admin/messaging")} className="text-sm text-slate-300 hover:text-white transition-colors">Messaging moderation</button>}
+            {user?.role === "admin" && <button onClick={() => setLocation("/admin/marketplace")} className="text-sm text-slate-300 hover:text-white transition-colors">Marketplace moderation</button>}
             {user ? (
               <button
                 onClick={() => setLocation("/dashboard")}
@@ -84,6 +90,12 @@ export function Navbar() {
             <a href="#features" className="block px-3 py-2.5 text-sm text-slate-300 rounded-lg hover:bg-white/5" onClick={() => setMobileOpen(false)}>Features</a>
             <a href="#how-it-works" className="block px-3 py-2.5 text-sm text-slate-300 rounded-lg hover:bg-white/5" onClick={() => setMobileOpen(false)}>How It Works</a>
             <a href="#pricing" className="block px-3 py-2.5 text-sm text-slate-300 rounded-lg hover:bg-white/5" onClick={() => setMobileOpen(false)}>Pricing</a>
+            <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/5 w-full" onClick={() => { setLocation("/fuel-finder"); setMobileOpen(false); }}>Fuel Finder</Button>
+            {user && <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/5 w-full" onClick={() => { setLocation("/community"); setMobileOpen(false); }}>Community dashboard</Button>}
+            {user && <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/5 w-full" onClick={() => { setLocation("/messages"); setMobileOpen(false); }}>Business messages</Button>}
+            {user && <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/5 w-full" onClick={() => { setLocation("/marketplace"); setMobileOpen(false); }}>Fuel marketplace</Button>}
+            {user?.role === "admin" && <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/5 w-full" onClick={() => { setLocation("/admin/messaging"); setMobileOpen(false); }}>Messaging moderation</Button>}
+            {user?.role === "admin" && <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/5 w-full" onClick={() => { setLocation("/admin/marketplace"); setMobileOpen(false); }}>Marketplace moderation</Button>}
             <div className="pt-3 flex flex-col gap-2">
               {user ? (
                 <>

@@ -37,8 +37,9 @@ import {
 } from "lucide-react";
 import type { Terminal, Forecast, MarketSignal, SubscriptionTier } from "@shared/schema";
 import { TIER_LIMITS } from "@shared/schema";
+import { AdminFuelFinderPanel } from "@/components/admin-fuel-finder";
 
-type AdminTab = "terminals" | "forecast" | "signals" | "history" | "subscriptions" | "payments";
+type AdminTab = "terminals" | "forecast" | "signals" | "history" | "subscriptions" | "payments" | "fuel-finder";
 
 interface SubUser {
   id: string;
@@ -64,7 +65,10 @@ export default function Admin() {
   const { user, token, logout, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<AdminTab>("terminals");
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    return requestedTab === "fuel-finder" ? "fuel-finder" : "terminals";
+  });
   const fetchFn = authFetch(token);
   const { data: terminals } = useQuery<Terminal[]>({
     queryKey: ["/api/admin/terminals"],
@@ -164,6 +168,7 @@ export default function Admin() {
     { key: "history", label: "Forecast History", icon: History },
     { key: "subscriptions", label: "Subscriptions", icon: Users },
     { key: "payments", label: "Payments", icon: Wallet },
+    { key: "fuel-finder", label: "Fuel Finder", icon: MapPin },
   ];
 
   return (
@@ -323,6 +328,7 @@ export default function Admin() {
         {activeTab === "history" && <HistoryPanel token={token} fetchFn={fetchFn} />}
         {activeTab === "subscriptions" && <SubscriptionsPanel token={token} fetchFn={fetchFn} toast={toast} />}
         {activeTab === "payments" && <PaymentRequestsPanel token={token} fetchFn={fetchFn} toast={toast} />}
+        {activeTab === "fuel-finder" && <AdminFuelFinderPanel token={token} fetchFn={fetchFn} toast={toast} />}
       </main>
     </div>
   );

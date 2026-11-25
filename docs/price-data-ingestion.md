@@ -1,6 +1,6 @@
 # Automated price data
 
-FuelIQ updates its price list from the configured NNPCL API and signed, allow-listed Twilio WhatsApp reports. The dashboard refreshes the list every 60 seconds and displays the source and observation time for each location. Seeded local history is labeled `sample`; it is not a live quote.
+FuelIQ updates its price list from the configured NNPCL API and signed, allow-listed Twilio WhatsApp reports. The dashboard refreshes the price history every 60 seconds and plots the latest observation per Nigeria calendar day, with the observation time and source status. Seeded or legacy records without a verified source are identified as sample or unverified history, not current live quotes.
 
 ## NNPCL API
 

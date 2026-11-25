@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
-    <title>FuelIQ NG - Petroleum Market Forecast Platform</title>
-    <meta name="description" content="Make informed fuel buying decisions with real-time price forecasts for Lagos and beyond." />
+    <title>FuelIQ NG - Nigeria Fuel &amp; Market Intelligence</title>
+    <meta name="description" content="Understand Nigerian fuel markets, compare source-labelled station prices, and explore market signals with clear update timestamps." />
 
     <meta name="theme-color" content="#0f172a" />
     <meta name="background-color" content="#060b18" />
@@ -23,14 +23,14 @@
     <meta name="msapplication-TileColor" content="#0f172a" />
     <meta name="msapplication-TileImage" content="/icon-144x144.png" />
 
-    <meta property="og:title" content="FuelIQ NG - Petroleum Market Forecast Platform" />
-    <meta property="og:description" content="Real-time fuel price forecasts for Nigerian marketers" />
+    <meta property="og:title" content="FuelIQ NG - Nigeria Fuel &amp; Market Intelligence" />
+    <meta property="og:description" content="Explore Nigerian fuel market signals and compare station prices with clear source and freshness labels." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/icon-512x512.png" />
 
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="FuelIQ NG" />
-    <meta name="twitter:description" content="Real-time fuel price forecasts for Nigerian marketers" />
+    <meta name="twitter:description" content="Explore Nigerian fuel market signals and compare station prices with clear source and freshness labels." />
     <meta name="twitter:image" content="/icon-512x512.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,18 +40,40 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
+    <script type="module">
       if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          navigator.serviceWorker
-            .register("/sw.js", { scope: "/" })
-            .then(function (reg) {
-              console.log("[SW] Registered:", reg.scope);
-            })
-            .catch(function (err) {
-              console.log("[SW] Registration failed:", err);
+        if (import.meta.env.DEV) {
+          navigator.serviceWorker.getRegistrations().then(function (registrations) {
+            if (registrations.length === 0) {
+              sessionStorage.removeItem("fueliq-dev-sw-cleaned");
+              return;
+            }
+            Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            })).then(function () {
+              return caches.keys().then(function (cacheNames) {
+                return Promise.all(cacheNames
+                  .filter(function (name) { return name.startsWith("fueliq-"); })
+                  .map(function (name) { return caches.delete(name); }));
+              });
+            }).then(function () {
+              if (sessionStorage.getItem("fueliq-dev-sw-cleaned")) return;
+              sessionStorage.setItem("fueliq-dev-sw-cleaned", "1");
+              window.location.reload();
             });
-        });
+          });
+        } else {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker
+              .register("/sw.js", { scope: "/" })
+              .then(function (reg) {
+                console.log("[SW] Registered:", reg.scope);
+              })
+              .catch(function (err) {
+                console.log("[SW] Registration failed:", err);
+              });
+          });
+        }
       }
     </script>
   </body>

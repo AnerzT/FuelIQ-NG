@@ -12,6 +12,7 @@ type User = {
   name: string;
   email: string;
   password: string;
+  createdAt?: Date | string;
   phone?: string;
   whatsappPhone?: string;
   role: string;
@@ -22,6 +23,14 @@ type User = {
   notificationPrefs?: any;
   forecastsUsedToday?: number;
   smsAlertsUsedThisWeek?: number;
+  deletedAt?: string;
+};
+
+type AccountDeletionAudit = {
+  actorUserId: string;
+  targetUserId: string;
+  action: "self_service" | "admin";
+  occurredAt: string;
 };
 
 type Terminal = {
@@ -204,6 +213,7 @@ class Storage {
   priceHistory: PriceHistoryEntry[] = [];
   refineryUpdates: RefineryUpdate[] = [];
   regulationUpdates: RegulationUpdate[] = [];
+  accountDeletionAudits: AccountDeletionAudit[] = [];
 
   private readonly usersFile = path.resolve(
     process.env.FUELIQ_DATA_DIR || path.join(process.cwd(), "data"),
@@ -259,6 +269,7 @@ class Storage {
         "priceHistory",
         "refineryUpdates",
         "regulationUpdates",
+        "accountDeletionAudits",
       ]) {
         if (Array.isArray(state[key]) && state[key].length > 0) {
           const fields = dateFields[key] || [];
@@ -296,6 +307,7 @@ class Storage {
       priceHistory: this.priceHistory,
       refineryUpdates: this.refineryUpdates,
       regulationUpdates: this.regulationUpdates,
+      accountDeletionAudits: this.accountDeletionAudits,
     };
     const temporaryFile = `${this.stateFile}.tmp`;
     fs.writeFileSync(temporaryFile, JSON.stringify(state, null, 2), "utf8");
@@ -519,11 +531,54 @@ class Storage {
 
   async getUserByEmail(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
-    return this.users.find(u => u.email.trim().toLowerCase() === normalizedEmail);
+    return this.users.find(u => !u.deletedAt && u.email.trim().toLowerCase() === normalizedEmail);
   }
 
   async getAllUsers() {
-    return this.users;
+    return this.users.filter(user => !user.deletedAt);
+  }
+
+  async getAccountDirectory() {
+    return this.users.map(({ id, name, email, role, subscriptionTier, createdAt, deletedAt }) => ({
+      id, name, email, role, tier: subscriptionTier || "free", createdAt, deletedAt: deletedAt || null,
+    }));
+  }
+
+  assertAccountCanBeDeleted(userId: string) {
+    const user = this.users.find((candidate) => candidate.id === userId && !candidate.deletedAt);
+    if (!user) return null;
+    if (user.role === "admin") {
+      const activeAdmins = this.users.filter((candidate) => candidate.role === "admin" && !candidate.deletedAt).length;
+      if (activeAdmins <= 1) throw new Error("The last active administrator account cannot be deleted.");
+    }
+    return user;
+  }
+
+  async deleteAccount(userId: string, actorUserId: string, action: "self_service" | "admin", anonymizedPassword: string) {
+    const user = this.assertAccountCanBeDeleted(userId);
+    if (!user) return false;
+    const deletedAt = new Date().toISOString();
+    user.name = "Deleted account";
+    user.email = `deleted+${user.id}@deleted.invalid`;
+    user.password = anonymizedPassword;
+    user.phone = undefined;
+    user.whatsappPhone = undefined;
+    user.notificationPrefs = undefined;
+    user.role = "deleted";
+    user.subscriptionTier = "free";
+    user.subscriptionStartDate = undefined;
+    user.subscriptionEndDate = undefined;
+    user.assignedTerminalId = undefined;
+    user.deletedAt = deletedAt;
+    this.accountDeletionAudits.push({
+      actorUserId,
+      targetUserId: userId,
+      action,
+      occurredAt: deletedAt,
+    });
+    this.persistUsers();
+    this.persistState();
+    return true;
   }
 
   async updateUser(id: string, data: Partial<User>) {
@@ -1000,7 +1055,10 @@ class Storage {
       .filter((entry) => entry.terminalId === terminalId && entry.productType === productType)
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    return allHistory.slice(-days);
+    const dayCount = Math.min(365, Math.max(1, Math.floor(days)));
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (dayCount - 1));
+    return allHistory.filter(entry => entry.date >= cutoff);
   }
 
   async recordPriceObservation(data: {

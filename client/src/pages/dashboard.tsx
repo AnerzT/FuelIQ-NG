@@ -206,6 +206,58 @@ const tooltipStyle = {
   boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
 };
 
+type PriceHistoryObservation = PriceHistoryEntry & { source?: string };
+type DailyPricePoint = {
+  date: string;
+  dateKey: string;
+  price: number;
+  observedAt: string;
+  source?: string;
+};
+
+function getNigerianDateKey(value: Date | string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find(item => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function getDailyPriceTrend(history: PriceHistoryObservation[]): DailyPricePoint[] {
+  const sortedHistory = history
+    .filter(entry => Number.isFinite(new Date(entry.date).getTime()))
+    .slice()
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const byDay = new Map<string, DailyPricePoint>();
+
+  for (const entry of sortedHistory) {
+    const observedAt = new Date(entry.date);
+    const dateKey = getNigerianDateKey(observedAt);
+    byDay.set(dateKey, {
+      date: observedAt.toLocaleDateString("en-NG", {
+        timeZone: "Africa/Lagos",
+        month: "short",
+        day: "numeric",
+      }),
+      dateKey,
+      price: entry.price,
+      observedAt: observedAt.toISOString(),
+      source: entry.source,
+    });
+  }
+
+  return Array.from(byDay.values());
+}
+
+function getPreviousDateKey(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 interface ForecastResponse {
   terminal: Terminal;
   forecast: Forecast;
@@ -245,7 +297,7 @@ export default function Dashboard() {
     enabled: !!selectedTerminalId && !!token,
   });
 
-  const { data: priceHistoryData, isLoading: historyLoading, refetch: refetchHistory } = useQuery<PriceHistoryEntry[]>({
+  const { data: priceHistoryData, isLoading: historyLoading, refetch: refetchHistory } = useQuery<PriceHistoryObservation[]>({
     queryKey: ["/api/terminals", selectedTerminalId, `price-history?productType=${encodeURIComponent(selectedProduct)}`],
     queryFn: fetchFn,
     enabled: !!selectedTerminalId && !!token,
@@ -319,13 +371,7 @@ export default function Dashboard() {
     return null;
   }
 
-  const chartData = (priceHistoryData || [])
-    .slice()
-    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map((entry: any) => ({
-      date: new Date(entry.date).toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
-      price: entry.price,
-    }));
+  const chartData = getDailyPriceTrend(priceHistoryData || []);
 
   const forecast = forecastData?.forecast;
   const terminal = forecastData?.terminal;
@@ -339,6 +385,21 @@ export default function Dashboard() {
   const priceDelta = latestPriceEntry && previousPriceEntry ? latestPriceEntry.price - previousPriceEntry.price : 0;
   const deltaLabel = priceDelta > 0 ? `+₦${priceDelta.toLocaleString()}` : priceDelta < 0 ? `-₦${Math.abs(priceDelta).toLocaleString()}` : "₦0";
   const deltaColor = priceDelta > 0 ? "text-emerald-400" : priceDelta < 0 ? "text-red-400" : "text-slate-400";
+  const priceComparisonLabel = latestPriceEntry && previousPriceEntry
+    ? previousPriceEntry.dateKey === getPreviousDateKey(latestPriceEntry.dateKey)
+      ? "vs previous day"
+      : `vs prior observation (${previousPriceEntry.date})`
+    : "";
+  const verifiedPriceSources = ["NNPC API", "WhatsApp"];
+  const latestPriceIsVerified = Boolean(latestPriceEntry?.source && verifiedPriceSources.includes(latestPriceEntry.source));
+  const latestPriceIsCurrentDay = Boolean(latestPriceEntry && latestPriceEntry.dateKey === getNigerianDateKey(new Date()));
+  const priceFreshnessLabel = !latestPriceEntry
+    ? "No price observations available for this terminal and product."
+    : latestPriceIsCurrentDay && latestPriceIsVerified
+      ? `Verified ${latestPriceEntry.source} quote received today at ${new Date(latestPriceEntry.observedAt).toLocaleTimeString("en-NG", { timeZone: "Africa/Lagos", hour: "numeric", minute: "2-digit" })}.`
+      : !latestPriceIsVerified
+        ? `Showing sample or unverified history through ${latestPriceEntry.date}; no current-day verified quote is available.`
+        : `Last verified quote: ${latestPriceEntry.date} at ${new Date(latestPriceEntry.observedAt).toLocaleTimeString("en-NG", { timeZone: "Africa/Lagos", hour: "numeric", minute: "2-digit" })}; no quote received today.`;
 
   const currentDate = new Date().toLocaleDateString("en-NG", {
     weekday: "long",
@@ -376,6 +437,22 @@ export default function Dashboard() {
                   <span className="sm:hidden">Forecast</span>
                 </span>
               )}
+              <button
+                onClick={() => setLocation("/fuel-finder")}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/15"
+                data-testid="button-fuel-finder"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                <span>Fuel Finder</span>
+              </button>
+              <button
+                onClick={() => setLocation("/marketplace")}
+                className="flex items-center gap-1.5 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1.5 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/15"
+                data-testid="button-fuel-marketplace"
+              >
+                <Package className="h-3.5 w-3.5" />
+                <span>Marketplace</span>
+              </button>
               <button className="relative p-2 rounded-lg hover:bg-white/[0.04] transition-colors" data-testid="button-notifications">
                 <Bell className="w-4 h-4 text-slate-400" />
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -536,6 +613,10 @@ export default function Dashboard() {
               latestPriceEntry={latestPriceEntry}
               deltaColor={deltaColor}
               deltaLabel={deltaLabel}
+              priceComparisonLabel={priceComparisonLabel}
+              priceFreshnessLabel={priceFreshnessLabel}
+              latestPriceIsCurrentDay={latestPriceIsCurrentDay}
+              latestPriceIsVerified={latestPriceIsVerified}
               selectedTerminal={selectedTerminal}
               refineryStatusData={refineryStatusData}
               regulationData={regulationData}
@@ -630,7 +711,7 @@ function LockedFeature({ feature, tier }: { feature: string; tier: string }) {
   );
 }
 
-function OverviewTab({ isDataLoading, isForecastLoading, signal, terminal, terminalInfo, forecast, biasDisplay, historyLoading, chartData, latestPriceEntry, deltaColor, deltaLabel, selectedTerminal, refineryStatusData, regulationData, refineryUpdatesData, traderSignalsData, token, fetchFn }: any) {
+function OverviewTab({ isDataLoading, isForecastLoading, signal, terminal, terminalInfo, forecast, biasDisplay, historyLoading, chartData, latestPriceEntry, deltaColor, deltaLabel, priceComparisonLabel, priceFreshnessLabel, latestPriceIsCurrentDay, latestPriceIsVerified, selectedTerminal, refineryStatusData, regulationData, refineryUpdatesData, traderSignalsData, token, fetchFn }: any) {
   if (isDataLoading) {
     return (
       <div className="space-y-5">
@@ -796,13 +877,20 @@ function OverviewTab({ isDataLoading, isForecastLoading, signal, terminal, termi
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-5" data-testid="card-price-chart">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div>
-              <h3 className="font-semibold text-white">Price Trend (Last 30 Days)</h3>
+              <h3 className="font-semibold text-white">Daily Price Trend (Last 30 Days)</h3>
               {latestPriceEntry && (
                 <div className="text-sm text-slate-400 mt-1">
                   Latest: <span className="font-semibold text-white">₦{latestPriceEntry.price.toLocaleString()}</span>
-                  <span className={`ml-3 ${deltaColor}`}>{deltaLabel} vs yesterday</span>
+                  {priceComparisonLabel && <span className={`ml-3 ${deltaColor}`}>{deltaLabel} {priceComparisonLabel}</span>}
                 </div>
               )}
+              <div
+                className={`mt-2 text-xs ${latestPriceIsCurrentDay && latestPriceIsVerified ? "text-emerald-400" : "text-amber-300"}`}
+                data-testid="text-price-freshness"
+                role="status"
+              >
+                {priceFreshnessLabel}
+              </div>
             </div>
             {selectedTerminal && (
               <span className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs font-mono text-emerald-400">
@@ -1679,9 +1767,13 @@ function RegulationUpdatesTab({ token, fetchFn, data }: { token: string | null; 
 }
 
 function SettingsTab({ user, token, fetchFn, notifPrefs, refetchNotifPrefs }: { user: any; token: string | null; fetchFn: any; notifPrefs: any; refetchNotifPrefs: () => void }) {
+  const { logout } = useAuth();
+  const [, setLocation] = useLocation();
   const prefs = notifPrefs || {};
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [deletionPassword, setDeletionPassword] = useState("");
+  const [deletionError, setDeletionError] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [whatsappPhone, setWhatsappPhone] = useState("");
 
@@ -1703,6 +1795,25 @@ function SettingsTab({ user, token, fetchFn, notifPrefs, refetchNotifPrefs }: { 
           smsEnabled,
           whatsappEnabled,
         },
+      });
+
+      const deleteAccountMutation = useMutation({
+        mutationFn: async () => {
+          const response = await fetch("/api/account", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ password: deletionPassword }),
+          });
+          if (!response.ok) {
+            const result = await response.json().catch(() => null);
+            throw new Error(result?.message || "Account deletion failed.");
+          }
+        },
+        onSuccess: () => {
+          logout();
+          setLocation("/");
+        },
+        onError: (error) => setDeletionError((error as Error).message),
       });
       return res.json();
     },
@@ -1829,6 +1940,48 @@ function SettingsTab({ user, token, fetchFn, notifPrefs, refetchNotifPrefs }: { 
           </Button>
         </div>
       </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setDeletionError("");
+          if (window.confirm("Delete your FuelIQ account? This cannot be undone.")) {
+            deleteAccountMutation.mutate();
+          }
+        }}
+        className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-6 space-y-4"
+        data-testid="card-settings-delete-account"
+      >
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wider text-red-300">Delete account</h4>
+          <p className="mt-2 text-sm text-slate-400">
+            This permanently disables sign-in and anonymizes your direct account details. Records required for
+            platform safety, fuel reporting, and transaction history may be retained; registered business assets
+            will be suspended.
+          </p>
+        </div>
+        <label className="block space-y-1.5">
+          <span className="text-xs uppercase tracking-wider text-slate-500">Current password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={deletionPassword}
+            onChange={(event) => setDeletionPassword(event.target.value)}
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-white"
+            data-testid="input-delete-account-password"
+          />
+        </label>
+        {deletionError && <p role="alert" className="text-sm text-red-300">{deletionError}</p>}
+        <Button
+          type="submit"
+          variant="destructive"
+          disabled={deleteAccountMutation.isPending || !deletionPassword}
+          data-testid="button-delete-account"
+        >
+          {deleteAccountMutation.isPending ? "Deleting account…" : "Permanently delete my account"}
+        </Button>
+      </form>
     </div>
   );
 }

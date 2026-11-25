@@ -1,11 +1,12 @@
 import { drizzle } from "drizzle-orm/postgres-js";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import * as schema from "../shared/schema.js";
 
-let dbInstance: ReturnType<typeof drizzle> | null = null;
+let dbInstance: PostgresJsDatabase<typeof schema> | null = null;
 
-export async function getDb() {
+export async function getDb(): Promise<PostgresJsDatabase<typeof schema>> {
   if (dbInstance) return dbInstance;
 
   const databaseUrl = process.env.DATABASE_URL;

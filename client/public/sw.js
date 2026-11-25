@@ -1,4 +1,4 @@
-const CACHE_NAME = "fueliq-v1";
+const CACHE_NAME = "fueliq-v2";
 const OFFLINE_URL = "/offline.html";
 
 const PRECACHE_URLS = [
@@ -28,12 +28,29 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const requestUrl = new URL(event.request.url);
+  if (
+    event.request.method !== "GET" ||
+    requestUrl.origin !== self.location.origin ||
+    requestUrl.pathname.startsWith("/api/") ||
+    requestUrl.pathname.startsWith("/src/") ||
+    requestUrl.pathname.startsWith("/@") ||
+    requestUrl.pathname.startsWith("/node_modules/") ||
+    requestUrl.pathname.startsWith("/@fs/")
+  ) {
+    return;
+  }
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => {
         return caches.match(OFFLINE_URL);
       })
     );
+    return;
+  }
+
+  if (!requestUrl.pathname.startsWith("/assets/")) {
     return;
   }
 

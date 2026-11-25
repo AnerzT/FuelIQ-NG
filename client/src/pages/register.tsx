@@ -57,21 +57,23 @@ export default function Register() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     password: "",
+    verificationChannel: "email" as "email" | "sms",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.password.length < 6) {
-      toast({ title: "Weak password", description: "Password must be at least 6 characters.", variant: "destructive" });
+    if (form.password.length < 8) {
+      toast({ title: "Weak password", description: "Password must be at least 8 characters.", variant: "destructive" });
       return;
     }
     setLoading(true);
     try {
-      await register(form);
-      setLocation("/dashboard");
+      const result = await register(form);
+      setLocation(`/verify-account?channel=${form.verificationChannel}${result.verificationSent ? "" : "&delivery=unavailable"}`);
     } catch (err: any) {
       toast({ title: "Registration failed", description: err.message, variant: "destructive" });
     } finally {
@@ -126,6 +128,32 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="phone">Phone number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+234 801 234 5678"
+                  value={form.phone}
+                  onChange={(e) => updateField("phone", e.target.value)}
+                  required
+                  minLength={7}
+                  autoComplete="tel"
+                  data-testid="input-phone"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="verificationChannel">Verify using</Label>
+                <select
+                  id="verificationChannel"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={form.verificationChannel}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verificationChannel: e.target.value as "email" | "sms" }))}
+                >
+                  <option value="email">Email</option>
+                  <option value="sms">SMS</option>
+                </select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Input
@@ -135,7 +163,7 @@ export default function Register() {
                     value={form.password}
                     onChange={(e) => updateField("password", e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                     autoComplete="new-password"
                     className="pr-10"
                     data-testid="input-password"

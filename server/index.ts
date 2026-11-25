@@ -4,6 +4,8 @@ import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { registerRoutes } from "./routes.js";
 import { testDatabaseConnection } from "./db.js";
+import { startCommunityFuelJobs } from "./services/community-fuel.service.js";
+import { startMarketplaceJobs } from "./services/fuel-marketplace.service.js";
 
 process.on('uncaughtException', (err: Error) => {
   console.error('🔥 UNCAUGHT EXCEPTION:', err);
@@ -90,6 +92,8 @@ if (path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1
   createApp().then(app => {
     const httpServer = createServer(app);
     httpServer.listen(PORT, () => {
+      startCommunityFuelJobs();
+      startMarketplaceJobs();
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
     });
