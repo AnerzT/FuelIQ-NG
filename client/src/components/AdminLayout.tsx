@@ -11,14 +11,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen flex-col bg-gray-100 md:flex-row">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white flex flex-col">
+      <aside className="flex w-full shrink-0 flex-col bg-gray-900 text-white md:w-64">
         <div className="p-4 border-b border-gray-800">
           <h1 className="text-xl font-bold">Admin Panel</h1>
           <p className="text-sm text-gray-400 mt-1">{user?.name}</p>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex flex-wrap gap-1 p-3 md:flex-1 md:flex-col md:space-y-1 md:p-4">
           <Link href="/admin" className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-800 transition">
             <LayoutDashboard size={18} /> Dashboard
           </Link>
@@ -32,7 +32,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <TrendingUp size={18} /> Forecasts
           </Link>
         </nav>
-        <div className="p-4 border-t border-gray-800">
+        <div className="border-t border-gray-800 p-3 md:p-4">
           <button
             onClick={logout}
             className="flex items-center gap-3 text-red-400 hover:text-red-300 w-full px-3 py-2 rounded hover:bg-gray-800"
@@ -43,8 +43,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-6">
-        <div className="bg-white rounded-lg shadow p-6">{children}</div>
+      <main className="min-w-0 flex-1 p-3 sm:p-4 md:p-6">
+        <div className="min-w-0 overflow-hidden rounded-lg bg-white p-3 shadow sm:p-4 md:p-6">{children}</div>
       </main>
     </div>
   );
