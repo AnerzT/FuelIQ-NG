@@ -20,7 +20,7 @@ export function Navbar() {
             <span className="text-lg font-bold tracking-tight text-white">FuelIQ NG</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden xl:flex items-center gap-4 2xl:gap-6">
             <a href="#features" className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-features">Features</a>
             <a href="#how-it-works" className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-how-it-works">How It Works</a>
             <a href="#pricing" className="text-sm text-slate-300 hover:text-white transition-colors" data-testid="link-pricing">Pricing</a>
@@ -49,7 +49,7 @@ export function Navbar() {
             )}
           </div>
 
-          <div className="hidden md:block">
+          <div className="hidden xl:block">
             {user ? (
               <Button
                 variant="outline"
@@ -75,7 +75,7 @@ export function Navbar() {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden text-white hover:bg-white/10"
+            className="xl:hidden text-white hover:bg-white/10"
             onClick={() => setMobileOpen(!mobileOpen)}
             data-testid="button-mobile-menu"
           >
@@ -85,7 +85,7 @@ export function Navbar() {
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden bg-slate-900/95 backdrop-blur-xl border-t border-white/5">
+        <div className="xl:hidden max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain bg-slate-900/95 backdrop-blur-xl border-t border-white/5">
           <div className="px-4 py-4 space-y-1">
             <a href="#features" className="block px-3 py-2.5 text-sm text-slate-300 rounded-lg hover:bg-white/5" onClick={() => setMobileOpen(false)}>Features</a>
             <a href="#how-it-works" className="block px-3 py-2.5 text-sm text-slate-300 rounded-lg hover:bg-white/5" onClick={() => setMobileOpen(false)}>How It Works</a>

@@ -241,6 +241,11 @@ export default function FuelFinderPage() {
     refetchInterval: 60_000,
   });
 
+  const communityReports = (communityQuery.data?.submissions || []).filter((item) =>
+    communityCategory === "all" || item.category === communityCategory,
+  );
+  const selectedCommunityReport = communityReports.find((item) => item.id === selectedCommunityId) || communityReports[0];
+
   const communityHistoryQuery = useQuery<CommunityPriceHistory[]>({
     queryKey: ["/api/community/submissions/history", selectedCommunityReport?.id],
     queryFn: async () => {
@@ -264,10 +269,6 @@ export default function FuelFinderPage() {
   const currentPrice = (station: Station) => station.latestPrices.find((item) => item.productType === product);
   const selectedStation = stations.find((station) => station.id === selectedStationId) || stations[0];
   const cityOptions = state ? meta?.citiesByState[state] || [] : [];
-  const communityReports = (communityQuery.data?.submissions || []).filter((item) =>
-    communityCategory === "all" || item.category === communityCategory,
-  );
-  const selectedCommunityReport = communityReports.find((item) => item.id === selectedCommunityId) || communityReports[0];
   const communityAverages = (communityQuery.data?.averages || []).filter((average) =>
     average.sourceType === "community"
     && (communityCategory === "all" || average.aggregationKey.toLowerCase().includes(communityCategory)),
